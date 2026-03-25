@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>RCPT — Receipt Scanner</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --red: #C8102E;
+    --red-dark: #A00D24;
+    --red-pale: #fdf0f2;
+    --black: #0a0a0a;
+    --grey-90: #1a1a1a;
+    --grey-70: #4a4a4a;
+    --grey-40: #999;
+    --grey-15: #d9d9d9;
+    --grey-06: #f0f0f0;
+    --white: #ffffff;
+    --mono: 'Roboto Mono', monospace;
+    --sans: 'Roboto', sans-serif;
+    --radius: 2px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--white);
+    color: var(--black);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── LAYOUT ── */
+  .app {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding: 0 0 40px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 20px 20px;
+    border-bottom: 1px solid var(--grey-15);
+    position: sticky;
+    top: 0;
+    background: var(--white);
+    z-index: 10;
+  }
+
+  .wordmark {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    color: var(--black);
+  }
+  .wordmark span { color: var(--red); }
+
+  .badge-count {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--black);
+    color: var(--white);
+    padding: 2px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.05em;
+    display: none;
+  }
+  .badge-count.visible { display: inline-block; }
+
+  /* ── MAIN CONTENT ── */
+  main { flex: 1; padding: 0 20px; }
+
+  /* ── EMAIL SECTION ── */
+  .section { margin-top: 28px; }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--grey-40);
+    margin-bottom: 8px;
+  }
+
+  .input-row {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--grey-15);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .input-row:focus-within { border-color: var(--black); }
+
+  .input-icon {
+    padding: 0 12px;
+    color: var(--grey-40);
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .email-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--black);
+    padding: 13px 12px 13px 0;
+    background: transparent;
+    width: 100%;
+  }
+  .email-input::placeholder { color: var(--grey-40); }
+
+  /* ── MODE TOGGLE ── */
+  .mode-toggle {
+    display: flex;
+    border: 1px solid var(--grey-15);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-top: 28px;
+  }
+
+  .mode-btn {
+    flex: 1;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 11px 8px;
+    border: none;
+    background: var(--white);
+    color: var(--grey-40);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .mode-btn.active {
+    background: var(--black);
+    color: var(--white);
+  }
+  .mode-btn:not(.active):hover { background: var(--grey-06); color: var(--black); }
+
+  /* ── CAPTURE OPTIONS ── */
+  .capture-options {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: row;
+    gap: 0;
+    border: 1.5px solid var(--grey-15);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .capture-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 22px 12px;
+    cursor: pointer;
+    transition: all 0.18s;
+    background: var(--white);
+    position: relative;
+  }
+  .capture-btn:hover { background: var(--grey-06); }
+  .capture-btn:hover .capture-icon { border-color: var(--red); }
+  .capture-btn:hover .capture-icon svg path,
+  .capture-btn:hover .capture-icon svg polyline,
+  .capture-btn:hover .capture-icon svg line,
+  .capture-btn:hover .capture-icon svg circle { stroke: var(--red); }
+  .capture-btn:active { background: var(--red-pale); }
+
+  .capture-divider {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 12px 0;
+    flex-shrink: 0;
+    width: 28px;
+  }
+  .capture-divider-line { flex: 1; width: 1px; background: var(--grey-15); }
+  .capture-divider-text {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--grey-40);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .capture-icon {
+    width: 46px;
+    height: 46px;
+    border: 1.5px solid var(--grey-15);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.18s;
+  }
+  .capture-icon svg * { transition: stroke 0.18s; }
+
+  .capture-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--black);
+    text-align: center;
+  }
+  .capture-sub {
+    font-family: var(--sans);
+    font-size: 10px;
+    color: var(--grey-40);
+    text-align: center;
+  }
+
+  .file-input { display: none; }
+
+  /* ── QUEUE ── */
+  .queue { margin-top: 24px; display: flex; flex-direction: column; gap: 10px; }
+
+  .queue-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid var(--grey-15);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    position: relative;
+    animation: slideIn 0.2s ease;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .thumb-wrap {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--grey-06);
+    position: relative;
+  }
+  .thumb-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .item-info { flex: 1; min-width: 0; }
+  .item-name {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--black);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .item-meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--grey-40);
+    margin-top: 3px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .quality-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .quality-dot.good { background: #22c55e; }
+  .quality-dot.warn { background: #f59e0b; }
+  .quality-dot.bad  { background: var(--red); }
+
+  .item-actions { display: flex; gap: 6px; }
+
+  .btn-icon {
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--grey-15);
+    border-radius: var(--radius);
+    background: var(--white);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .btn-icon:hover { border-color: var(--black); background: var(--grey-06); }
+  .btn-icon.remove:hover { border-color: var(--red); background: var(--red-pale); }
+  .btn-icon.remove:hover svg path { stroke: var(--red); }
+
+  /* ── QUALITY TAG ── */
+  .quality-tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 2px;
+  }
+  .quality-tag.good { background: #f0fdf4; color: #15803d; }
+  .quality-tag.warn { background: #fffbeb; color: #b45309; }
+  .quality-tag.bad  { background: var(--red-pale); color: var(--red); }
+
+  /* ── BOTTOM ACTION BAR ── */
+  .action-bar {
+    position: sticky;
+    bottom: 0;
+    background: var(--white);
+    border-top: 1px solid var(--grey-15);
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .summary-text {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--grey-40);
+  }
+  .summary-text strong {
+    color: var(--black);
+    font-weight: 500;
+  }
+
+  .btn-primary {
+    width: 100%;
+    padding: 15px;
+    background: var(--red);
+    color: var(--white);
+    border: none;
+    border-radius: var(--radius);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--red-dark); }
+  .btn-primary:disabled {
+    background: var(--grey-15);
+    color: var(--grey-40);
+    cursor: not-allowed;
+  }
+
+  .btn-primary.loading {
+    background: var(--grey-70);
+    cursor: not-allowed;
+  }
+
+  /* ── EMPTY STATE ── */
+  .empty-action-bar {
+    padding: 16px 20px 20px;
+  }
+
+  /* ── PREVIEW MODAL ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--white);
+    border-radius: var(--radius);
+    width: 100%;
+    max-width: 440px;
+    max-height: 90dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: modalIn 0.2s ease;
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--grey-15);
+    flex-shrink: 0;
+  }
+  .modal-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .modal-body {
+    overflow-y: auto;
+    flex: 1;
+  }
+  .modal-body img {
+    width: 100%;
+    display: block;
+  }
+
+  .modal-footer {
+    padding: 14px 16px;
+    border-top: 1px solid var(--grey-15);
+    flex-shrink: 0;
+  }
+  .readability-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .readability-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--grey-40);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .readability-track {
+    flex: 1;
+    height: 4px;
+    background: var(--grey-15);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .readability-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+  .readability-score {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--black);
+    color: var(--white);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    padding: 10px 18px;
+    border-radius: 20px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.25s;
+    white-space: nowrap;
+    z-index: 200;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .toast.success { background: #15803d; }
+  .toast.error   { background: var(--red); }
+
+  /* ── SUCCESS STATE ── */
+  .success-banner {
+    display: none;
+    margin-top: 20px;
+    padding: 16px;
+    border: 1px solid #22c55e;
+    border-radius: var(--radius);
+    background: #f0fdf4;
+    text-align: center;
+    animation: slideIn 0.3s ease;
+  }
+  .success-banner.visible { display: block; }
+  .success-banner p {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: #15803d;
+    letter-spacing: 0.05em;
+  }
+  .success-banner .tick {
+    font-size: 22px;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .divider-line { flex: 1; height: 1px; background: var(--grey-15); }
+  .divider-text {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--grey-40);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* ── NOTES FIELD ── */
+  .notes-input {
+    width: 100%;
+    border: 1px solid var(--grey-15);
+    border-radius: var(--radius);
+    padding: 11px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--black);
+    resize: none;
+    outline: none;
+    margin-top: 8px;
+    transition: border-color 0.15s;
+    background: var(--white);
+  }
+  .notes-input:focus { border-color: var(--black); }
+  .notes-input::placeholder { color: var(--grey-40); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--grey-15); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="wordmark">RCPT<span>.</span></div>
+    <span class="badge-count" id="badgeCount">0 items</span>
+  </header>
+
+  <main>
+
+    <!-- EMAIL -->
+    <div class="section">
+      <div class="section-label">Send to</div>
+      <div class="input-row">
+        <span class="input-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="#999" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="22,6 12,13 2,6" stroke="#999" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <input class="email-input" id="emailInput" type="email" placeholder="expenses@yourcompany.com" autocomplete="email">
+      </div>
+    </div>
+
+    <!-- NOTES -->
+    <div class="section">
+      <div class="section-label">Notes <span style="color:var(--grey-15)">/ optional</span></div>
+      <textarea class="notes-input" id="notesInput" rows="2" placeholder="e.g. Client lunch — Q2 expenses"></textarea>
+    </div>
+
+    <!-- MODE TOGGLE -->
+    <div class="mode-toggle" id="modeToggle">
+      <button class="mode-btn active" data-mode="single" onclick="setMode('single')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
+        </svg>
+        Single
+      </button>
+      <button class="mode-btn" data-mode="batch" onclick="setMode('batch')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+          <rect x="2" y="7" width="16" height="14" rx="2" stroke="currentColor" stroke-width="2"/>
+          <path d="M6 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-2" stroke="currentColor" stroke-width="2"/>
+        </svg>
+        Batch
+      </button>
+    </div>
+
+    <!-- CAPTURE OPTIONS -->
+    <div class="capture-options" id="captureZone">
+      <input class="file-input" id="cameraInput" type="file" accept="image/*" capture="environment" onchange="handleFiles(this.files)">
+      <input class="file-input" id="fileInput" type="file" accept="image/*,application/pdf" onchange="handleFiles(this.files)">
+
+      <!-- Camera button -->
+      <div class="capture-btn" id="cameraBtnZone" onclick="triggerCamera()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+        <div class="capture-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="12" cy="13" r="4" stroke="#0a0a0a" stroke-width="2"/>
+          </svg>
+        </div>
+        <div class="capture-label">Take Photo</div>
+        <div class="capture-sub">Use camera</div>
+      </div>
+
+      <!-- Divider -->
+      <div class="capture-divider">
+        <div class="capture-divider-line"></div>
+        <span class="capture-divider-text">or</span>
+        <div class="capture-divider-line"></div>
+      </div>
+
+      <!-- Upload button -->
+      <div class="capture-btn" onclick="triggerUpload()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+        <div class="capture-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="17 8 12 3 7 8" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="12" y1="3" x2="12" y2="15" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="capture-label">Upload File</div>
+        <div class="capture-sub">Photos, PDF · Max 10 MB</div>
+      </div>
+    </div>
+
+    <!-- DIVIDER (batch mode only) -->
+    <div class="divider" id="divider" style="display:none">
+      <div class="divider-line"></div>
+      <div class="divider-text">Queue</div>
+      <div class="divider-line"></div>
+    </div>
+
+    <!-- QUEUE -->
+    <div class="queue" id="queue"></div>
+
+    <!-- SUCCESS BANNER -->
+    <div class="success-banner" id="successBanner">
+      <span class="tick">✓</span>
+      <p id="successMsg">Receipt sent successfully.</p>
+    </div>
+
+  </main>
+
+  <!-- ACTION BAR -->
+  <div class="action-bar" id="actionBar">
+    <div class="summary-row" id="summaryRow" style="display:none">
+      <span class="summary-text"><strong id="itemCount">0</strong> receipt(s) ready</span>
+      <span class="summary-text" id="totalSize">0 KB</span>
+    </div>
+    <button class="btn-primary" id="sendBtn" disabled onclick="handleSend()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+        <line x1="22" y1="2" x2="11" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <polygon points="22 2 15 22 11 13 2 9 22 2" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+      Send Receipt
+    </button>
+  </div>
+
+</div>
+
+<!-- PREVIEW MODAL -->
+<div class="modal-overlay" id="previewModal" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Preview</span>
+      <button class="btn-icon" onclick="closePreview()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+          <line x1="18" y1="6" x2="6" y2="18" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round"/>
+          <line x1="6" y1="6" x2="18" y2="18" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <img id="previewImg" src="" alt="Receipt preview">
+    </div>
+    <div class="modal-footer">
+      <div class="readability-bar">
+        <span class="readability-label">Clarity</span>
+        <div class="readability-track">
+          <div class="readability-fill" id="readabilityFill" style="width:0%"></div>
+        </div>
+        <span class="readability-score" id="readabilityScore">—</span>
+      </div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--grey-40);text-align:center;" id="readabilityNote"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+  let mode = 'single';
+  let items = []; // { id, file, url, name, size, quality }
+  let idCounter = 0;
+
+  /* ── MODE ── */
+  function setMode(m) {
+    mode = m;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+    const cameraInput = document.getElementById('cameraInput');
+    const fileInput   = document.getElementById('fileInput');
+    if (m === 'batch') {
+      cameraInput.multiple = true;
+      fileInput.multiple   = true;
+      document.getElementById('divider').style.display = 'flex';
+    } else {
+      cameraInput.multiple = false;
+      fileInput.multiple   = false;
+      document.getElementById('divider').style.display = 'none';
+    }
+    renderQueue();
+    updateSendBtn();
+  }
+
+  /* ── CAPTURE ── */
+  function triggerCamera()  { document.getElementById('cameraInput').click(); }
+  function triggerUpload()  { document.getElementById('fileInput').click(); }
+
+  function handleFiles(files) {
+    const arr = Array.from(files);
+    if (!arr.length) return;
+    if (mode === 'single') { items = []; }
+    arr.forEach(f => {
+      if (f.size > 10 * 1024 * 1024) { showToast('File too large (max 10 MB)', 'error'); return; }
+      const url = URL.createObjectURL(f);
+      const id = ++idCounter;
+      analyseQuality(f).then(q => {
+        items.push({ id, file: f, url, name: f.name, size: f.size, quality: q });
+        renderQueue();
+        updateSendBtn();
+      });
+    });
+    document.getElementById('fileInput').value = '';
+    document.getElementById('successBanner').classList.remove('visible');
+  }
+
+  /* ── QUALITY ANALYSIS ── */
+  function analyseQuality(file) {
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onerror = () => resolve({ score: 50, level: 'warn' });
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => resolve({ score: 50, level: 'warn' });
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const maxDim = 80;
+            const scale = Math.min(maxDim / img.width, maxDim / img.height);
+            canvas.width  = Math.round(img.width * scale);
+            canvas.height = Math.round(img.height * scale);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            let brightness = 0, contrast = 0, prev = 0;
+            const pixels = d.length / 4;
+            for (let i = 0; i < d.length; i += 4) {
+              const lum = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+              brightness += lum;
+              contrast += Math.abs(lum - prev);
+              prev = lum;
+            }
+            brightness /= pixels;
+            contrast   /= pixels;
+            let score = 0;
+            if (brightness > 60 && brightness < 220) score += 50;
+            else if (brightness >= 30) score += 25;
+            if (contrast > 18) score += 50;
+            else if (contrast > 8) score += 30;
+            score = Math.min(100, score);
+            const level = score >= 70 ? 'good' : score >= 40 ? 'warn' : 'bad';
+            resolve({ score, level });
+          } catch (_) {
+            resolve({ score: 50, level: 'warn' });
+          }
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* ── RENDER QUEUE ── */
+  function renderQueue() {
+    const q = document.getElementById('queue');
+    q.innerHTML = '';
+    const captureZone = document.getElementById('captureZone');
+
+    if (mode === 'single' && items.length === 1) {
+      captureZone.style.display = 'none';
+    } else {
+      captureZone.style.display = 'flex';
+    }
+
+    items.forEach(item => {
+      const el = document.createElement('div');
+      el.className = 'queue-item';
+      el.id = 'item-' + item.id;
+      const sizeStr = item.size > 1024*1024
+        ? (item.size / (1024*1024)).toFixed(1) + ' MB'
+        : Math.round(item.size / 1024) + ' KB';
+      const qLabel = item.quality ? item.quality.level : 'warn';
+      const qText  = { good: 'Clear', warn: 'Check', bad: 'Blurry' }[qLabel] || '—';
+      el.innerHTML = `
+        <div class="thumb-wrap" onclick="openPreview(${item.id})" style="cursor:pointer">
+          <img src="${item.url}" alt="">
+        </div>
+        <div class="item-info">
+          <div class="item-name">${escHtml(item.name)}</div>
+          <div class="item-meta">
+            <span>${sizeStr}</span>
+            <span class="quality-tag ${qLabel}">${qText}</span>
+          </div>
+        </div>
+        <div class="item-actions">
+          <button class="btn-icon" title="Preview" onclick="openPreview(${item.id})">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="#0a0a0a" stroke-width="2"/>
+              <circle cx="12" cy="12" r="3" stroke="#0a0a0a" stroke-width="2"/>
+            </svg>
+          </button>
+          <button class="btn-icon remove" title="Remove" onclick="removeItem(${item.id})">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round"/>
+              <line x1="6" y1="6" x2="18" y2="18" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>`;
+      q.appendChild(el);
+    });
+
+    // Badge
+    const badge = document.getElementById('badgeCount');
+    if (items.length > 0) {
+      badge.textContent = items.length + (items.length === 1 ? ' item' : ' items');
+      badge.classList.add('visible');
+    } else {
+      badge.classList.remove('visible');
+      captureZone.style.display = 'flex';
+    }
+  }
+
+  function removeItem(id) {
+    const item = items.find(i => i.id === id);
+    if (item) URL.revokeObjectURL(item.url);
+    items = items.filter(i => i.id !== id);
+    renderQueue();
+    updateSendBtn();
+  }
+
+  /* ── SEND BTN STATE ── */
+  function updateSendBtn() {
+    const btn = document.getElementById('sendBtn');
+    const summaryRow = document.getElementById('summaryRow');
+    const hasEmail = document.getElementById('emailInput').value.trim();
+    const hasItems = items.length > 0;
+
+    if (hasItems) {
+      summaryRow.style.display = 'flex';
+      document.getElementById('itemCount').textContent = items.length;
+      const totalBytes = items.reduce((s, i) => s + i.size, 0);
+      document.getElementById('totalSize').textContent = totalBytes > 1024*1024
+        ? (totalBytes/(1024*1024)).toFixed(1) + ' MB'
+        : Math.round(totalBytes/1024) + ' KB';
+    } else {
+      summaryRow.style.display = 'none';
+    }
+
+    btn.disabled = !(hasEmail && hasItems);
+    btn.textContent = '';
+    const svg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><line x1="22" y1="2" x2="11" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polygon points="22 2 15 22 11 13 2 9 22 2" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`;
+    btn.innerHTML = svg + ' ' + (items.length > 1 ? `Send ${items.length} Receipts` : 'Send Receipt');
+  }
+
+  document.getElementById('emailInput').addEventListener('input', updateSendBtn);
+
+  /* ── EMAILJS CONFIG ── */
+  const EMAILJS_PUBLIC_KEY  = 'eVVEfK5-EQG4RlKxT';
+  const EMAILJS_SERVICE_ID  = 'service_6cf5zaj';
+  const EMAILJS_TEMPLATE_ID = 'template_onqly8z';
+
+  emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+
+  /* ── IMAGE → BASE64 ── */
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result); // full data URI: "data:image/jpeg;base64,..."
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* ── RESIZE IMAGE for email embedding ── */
+  // Uses FileReader (works on Android content:// URIs), then canvas resize.
+  // Falls back to raw base64 if canvas fails (e.g. tainted origin).
+  function resizeImage(file, maxDim = 1200, quality = 0.82) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onerror = () => resolve(null);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => resolve(null);
+        img.onload = () => {
+          try {
+            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width  = Math.round(img.width  * scale);
+            canvas.height = Math.round(img.height * scale);
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } catch (_) {
+            resolve(e.target.result); // fallback: use original base64
+          }
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* ── BUILD HTML EMAIL BODY ── */
+  // Embeds each image inline so they display directly in the inbox
+  async function buildEmailBody(itemList, notes) {
+    const parts = await Promise.all(itemList.map(async (item, i) => {
+      const dataUrl = await resizeImage(item.file);
+      if (!dataUrl) return `<p style="color:#999">[Image ${i+1} could not be processed]</p>`;
+      return `
+        <div style="margin-bottom:24px">
+          <p style="font-family:monospace;font-size:12px;color:#666;margin:0 0 6px">
+            Receipt ${i + 1} of ${itemList.length} &mdash; ${escHtml(item.name)}
+          </p>
+          <img src="${dataUrl}"
+               style="max-width:100%;border:1px solid #e0e0e0;border-radius:4px;display:block"
+               alt="Receipt ${i+1}">
+        </div>`;
+    }));
+
+    const notesBlock = notes
+      ? `<p style="font-family:monospace;font-size:13px;background:#f5f5f5;padding:10px 14px;border-radius:4px;margin-bottom:20px">
+           <strong>Notes:</strong> ${escHtml(notes)}
+         </p>`
+      : '';
+
+    return `
+      <div style="font-family:sans-serif;max-width:640px;margin:0 auto">
+        <h2 style="font-family:monospace;font-size:16px;border-bottom:2px solid #C8102E;padding-bottom:8px;margin-bottom:16px">
+          RCPT &mdash; ${itemList.length} receipt${itemList.length > 1 ? 's' : ''} submitted
+        </h2>
+        ${notesBlock}
+        ${parts.join('')}
+        <p style="font-family:monospace;font-size:11px;color:#bbb;margin-top:32px;border-top:1px solid #eee;padding-top:12px">
+          Sent via RCPT Scanner
+        </p>
+      </div>`;
+  }
+
+  /* ── SEND ── */
+  async function handleSend() {
+    const email = document.getElementById('emailInput').value.trim();
+    const notes = document.getElementById('notesInput').value.trim();
+    if (!email || !items.length) return;
+
+    const btn = document.getElementById('sendBtn');
+    btn.classList.add('loading');
+    btn.innerHTML = '⏳ &nbsp;Sending…';
+    btn.disabled = true;
+
+    try {
+      const htmlBody = await buildEmailBody(items, notes);
+      const count    = items.length;
+
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        to_email: email,
+        notes:    notes || 'No notes',
+        message:  htmlBody,
+      });
+
+      // Success — clear queue
+      items.forEach(i => URL.revokeObjectURL(i.url));
+      items = [];
+      renderQueue();
+      updateSendBtn();
+      document.getElementById('notesInput').value = '';
+
+      const banner = document.getElementById('successBanner');
+      document.getElementById('successMsg').textContent =
+        count === 1
+          ? `Receipt sent to ${email}`
+          : `${count} receipts sent to ${email}`;
+      banner.classList.add('visible');
+      showToast('Sent ✓', 'success');
+
+    } catch (err) {
+      console.error('EmailJS error:', err);
+      showToast('Send failed — check connection', 'error');
+    } finally {
+      btn.classList.remove('loading');
+      updateSendBtn();
+    }
+  }
+
+  /* ── PREVIEW ── */
+  function openPreview(id) {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+    document.getElementById('previewImg').src = item.url;
+    const score = item.quality ? item.quality.score : 50;
+    const level = item.quality ? item.quality.level : 'warn';
+    const fill = document.getElementById('readabilityFill');
+    fill.style.width = score + '%';
+    fill.style.background = level === 'good' ? '#22c55e' : level === 'warn' ? '#f59e0b' : '#C8102E';
+    document.getElementById('readabilityScore').textContent = score + '%';
+    document.getElementById('readabilityScore').style.color =
+      level === 'good' ? '#15803d' : level === 'warn' ? '#b45309' : '#C8102E';
+    document.getElementById('readabilityNote').textContent =
+      level === 'good' ? 'Text should be legible' :
+      level === 'warn' ? 'Check text is readable before sending' :
+      'Image may be too dark or blurry — retake recommended';
+    document.getElementById('previewModal').classList.add('open');
+  }
+
+  function closePreview() {
+    document.getElementById('previewModal').classList.remove('open');
+  }
+  function closeModal(e) {
+    if (e.target === document.getElementById('previewModal')) closePreview();
+  }
+
+  /* ── DRAG & DROP ── */
+  function handleDragOver(e) {
+    e.preventDefault();
+    document.getElementById('captureZone').classList.add('drag-over');
+  }
+  function handleDragLeave(e) {
+    document.getElementById('captureZone').classList.remove('drag-over');
+  }
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('captureZone').classList.remove('drag-over');
+    handleFiles(e.dataTransfer.files);
+  }
+
+  /* ── TOAST ── */
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast ' + type;
+    void t.offsetWidth;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  /* ── UTILS ── */
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>
