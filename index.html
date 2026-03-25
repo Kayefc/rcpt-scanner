@@ -937,9 +937,10 @@
   }
 
   /* ── RESIZE IMAGE for email embedding ── */
-  // Uses FileReader (works on Android content:// URIs), then canvas resize.
-  // Falls back to raw base64 if canvas fails (e.g. tainted origin).
-  function resizeImage(file, maxDim = 1200, quality = 0.82) {
+  // EmailJS free tier has a ~50KB total payload limit.
+  // We compress aggressively: shrink to max 600px and reduce quality in steps
+  // until the base64 output is under 35KB (leaves room for the rest of the email).
+  function resizeImage(file) {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onerror = () => resolve(null);
@@ -948,14 +949,27 @@
         img.onerror = () => resolve(null);
         img.onload = () => {
           try {
+            // Step 1: shrink to max 600px on longest side
+            const maxDim = 600;
             const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
             const canvas = document.createElement('canvas');
             canvas.width  = Math.round(img.width  * scale);
             canvas.height = Math.round(img.height * scale);
             canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-            resolve(canvas.toDataURL('image/jpeg', quality));
+
+            // Step 2: reduce quality until under 35KB base64 (~26KB binary)
+            const targetBytes = 35 * 1024;
+            let quality = 0.7;
+            let dataUrl  = canvas.toDataURL('image/jpeg', quality);
+
+            while (dataUrl.length > targetBytes * 1.37 && quality > 0.1) {
+              quality -= 0.1;
+              dataUrl  = canvas.toDataURL('image/jpeg', quality);
+            }
+
+            resolve(dataUrl);
           } catch (_) {
-            resolve(e.target.result); // fallback: use original base64
+            resolve(e.target.result);
           }
         };
         img.src = e.target.result;
@@ -1014,6 +1028,15 @@
     try {
       const htmlBody = await buildEmailBody(items, notes);
       const count    = items.length;
+
+      // Warn if payload is approaching EmailJS free tier limit (50KB)
+      const payloadSize = new Blob([htmlBody]).size;
+      if (payloadSize > 45000) {
+        showToast('Image too large for free plan — try a smaller file', 'error');
+        btn.classList.remove('loading');
+        updateSendBtn();
+        return;
+      }
 
       await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
         to_email: email,
