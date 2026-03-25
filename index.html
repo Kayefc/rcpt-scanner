@@ -574,6 +574,91 @@
   .notes-input:focus { border-color: var(--black); }
   .notes-input::placeholder { color: var(--grey-40); }
 
+  /* ── COMPRESSION CONTROLS ── */
+  .compress-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--grey-15);
+  }
+  .compress-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .compress-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--grey-40);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    width: 60px;
+  }
+  .compress-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--grey-15);
+    outline: none;
+  }
+  .compress-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--black);
+    cursor: pointer;
+    border: 2px solid var(--white);
+    box-shadow: 0 0 0 1px var(--grey-15);
+  }
+  .compress-value {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 44px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .compress-value.over { color: var(--red); }
+  .compress-value.ok   { color: #15803d; }
+  .size-bar-track {
+    height: 4px;
+    background: var(--grey-15);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .size-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s, background 0.3s;
+  }
+  .compress-hint {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--grey-40);
+    text-align: center;
+  }
+  .btn-apply {
+    width: 100%;
+    margin-top: 10px;
+    padding: 11px;
+    background: var(--black);
+    color: var(--white);
+    border: none;
+    border-radius: var(--radius);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-apply:hover { background: var(--grey-90); }
+
   /* scrollbar */
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -726,6 +811,20 @@
         <span class="readability-score" id="readabilityScore">—</span>
       </div>
       <div style="font-family:var(--mono);font-size:10px;color:var(--grey-40);text-align:center;" id="readabilityNote"></div>
+
+      <!-- COMPRESSION CONTROLS -->
+      <div class="compress-section">
+        <div class="compress-row">
+          <span class="compress-label">Size</span>
+          <input class="compress-slider" id="compressSlider" type="range" min="1" max="100" value="80" oninput="updateCompressPreview()">
+          <span class="compress-value" id="compressValue">—</span>
+        </div>
+        <div class="size-bar-track">
+          <div class="size-bar-fill" id="sizeBarFill" style="width:0%"></div>
+        </div>
+        <div class="compress-hint" id="compressHint">Drag left to reduce file size</div>
+        <button class="btn-apply" onclick="applyCompression()">Apply &amp; confirm</button>
+      </div>
     </div>
   </div>
 </div>
@@ -735,8 +834,9 @@
 
 <script>
   let mode = 'single';
-  let items = []; // { id, file, url, name, size, quality }
+  let items = []; // { id, file, url, name, size, quality, compressedDataUrl, compressedSize }
   let idCounter = 0;
+  let activePreviewId = null;
 
   /* ── MODE ── */
   function setMode(m) {
@@ -982,7 +1082,12 @@
   // Embeds each image inline so they display directly in the inbox
   async function buildEmailBody(itemList, notes) {
     const parts = await Promise.all(itemList.map(async (item, i) => {
-      const dataUrl = await resizeImage(item.file);
+      // Use already-compressed version if user applied it, otherwise compress now
+      let dataUrl = item.compressedDataUrl || null;
+      if (!dataUrl) {
+        const result = await compressToQuality(item.file, 0.5);
+        dataUrl = result.dataUrl;
+      }
       if (!dataUrl) return `<p style="color:#999">[Image ${i+1} could not be processed]</p>`;
       return `
         <div style="margin-bottom:24px">
@@ -1068,15 +1173,19 @@
     }
   }
 
-  /* ── PREVIEW ── */
+  /* ── PREVIEW & COMPRESSION ── */
   function openPreview(id) {
     const item = items.find(i => i.id === id);
     if (!item) return;
-    document.getElementById('previewImg').src = item.url;
+    activePreviewId = id;
+
+    // Show current compressed version if available, else original
+    document.getElementById('previewImg').src = item.compressedDataUrl || item.url;
+
     const score = item.quality ? item.quality.score : 50;
     const level = item.quality ? item.quality.level : 'warn';
-    const fill = document.getElementById('readabilityFill');
-    fill.style.width = score + '%';
+    const fill  = document.getElementById('readabilityFill');
+    fill.style.width      = score + '%';
     fill.style.background = level === 'good' ? '#22c55e' : level === 'warn' ? '#f59e0b' : '#C8102E';
     document.getElementById('readabilityScore').textContent = score + '%';
     document.getElementById('readabilityScore').style.color =
@@ -1085,7 +1194,91 @@
       level === 'good' ? 'Text should be legible' :
       level === 'warn' ? 'Check text is readable before sending' :
       'Image may be too dark or blurry — retake recommended';
+
+    // Init slider to reflect current compressed size or estimate
+    const currentSize = item.compressedSize || item.size;
+    const sliderVal = item.compressQuality != null ? Math.round(item.compressQuality * 100) : 80;
+    document.getElementById('compressSlider').value = sliderVal;
+    updateSizeBar(currentSize);
     document.getElementById('previewModal').classList.add('open');
+  }
+
+  function updateSizeBar(bytes) {
+    const kb      = bytes / 1024;
+    const limitKb = 45;
+    const pct     = Math.min(100, (kb / limitKb) * 100);
+    const fill    = document.getElementById('sizeBarFill');
+    const val     = document.getElementById('compressValue');
+    const hint    = document.getElementById('compressHint');
+    fill.style.width      = pct + '%';
+    fill.style.background = kb <= limitKb ? '#22c55e' : '#C8102E';
+    val.textContent       = kb < 1000 ? Math.round(kb) + ' KB' : (kb/1024).toFixed(1) + ' MB';
+    val.className         = 'compress-value ' + (kb <= limitKb ? 'ok' : 'over');
+    hint.textContent      = kb <= limitKb
+      ? 'Ready to send (' + Math.round(kb) + ' KB / 45 KB limit)'
+      : 'Too large — drag left to compress (' + Math.round(kb) + ' KB / 45 KB limit)';
+  }
+
+  // Live preview as slider moves — debounced so it doesn't hammer canvas on every tick
+  let compressTimer = null;
+  function updateCompressPreview() {
+    const item = items.find(i => i.id === activePreviewId);
+    if (!item) return;
+    clearTimeout(compressTimer);
+    compressTimer = setTimeout(() => {
+      const quality = parseInt(document.getElementById('compressSlider').value) / 100;
+      compressToQuality(item.file, quality).then(result => {
+        document.getElementById('previewImg').src = result.dataUrl;
+        updateSizeBar(result.bytes);
+      });
+    }, 120);
+  }
+
+  function compressToQuality(file, quality) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          // Scale down based on quality: high quality = 800px, low = 300px
+          const maxDim = Math.round(300 + (quality * 500));
+          const scale  = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width  = Math.round(img.width  * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', Math.max(0.1, quality));
+          // base64 length * 0.75 ≈ byte size
+          const bytes   = Math.round(dataUrl.length * 0.75);
+          resolve({ dataUrl, bytes });
+        };
+        img.onerror = () => resolve({ dataUrl: e.target.result, bytes: file.size });
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve({ dataUrl: '', bytes: 0 });
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function applyCompression() {
+    const item = items.find(i => i.id === activePreviewId);
+    if (!item) return;
+    const quality = parseInt(document.getElementById('compressSlider').value) / 100;
+    const btn = document.querySelector('.btn-apply');
+    btn.textContent = 'Compressing…';
+    compressToQuality(item.file, quality).then(result => {
+      item.compressedDataUrl  = result.dataUrl;
+      item.compressedSize     = result.bytes;
+      item.compressQuality    = quality;
+      // Update thumbnail in queue
+      const thumb = document.querySelector(`#item-${item.id} .thumb-wrap img`);
+      if (thumb) thumb.src = result.dataUrl;
+      updateSendBtn();
+      btn.textContent = 'Applied ✓';
+      setTimeout(() => { btn.textContent = 'Apply & confirm'; }, 1500);
+      updateSizeBar(result.bytes);
+      showToast('Compression applied', 'success');
+    });
   }
 
   function closePreview() {
