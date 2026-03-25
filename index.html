@@ -941,9 +941,12 @@
       const el = document.createElement('div');
       el.className = 'queue-item';
       el.id = 'item-' + item.id;
-      const sizeStr = item.size > 1024*1024
-        ? (item.size / (1024*1024)).toFixed(1) + ' MB'
-        : Math.round(item.size / 1024) + ' KB';
+      const displaySize = item.compressedSize || item.size;
+      const sizeStr = displaySize > 1024*1024
+        ? (displaySize / (1024*1024)).toFixed(1) + ' MB'
+        : Math.round(displaySize / 1024) + ' KB';
+      const sizeColor = item.compressedSize ? 'color:#15803d' : '';
+      const sizeTick  = item.compressedSize ? ' ✓' : '';
       const qLabel = item.quality ? item.quality.level : 'warn';
       const qText  = { good: 'Clear', warn: 'Check', bad: 'Blurry' }[qLabel] || '—';
       el.innerHTML = `
@@ -953,7 +956,7 @@
         <div class="item-info">
           <div class="item-name">${escHtml(item.name)}</div>
           <div class="item-meta">
-            <span>${sizeStr}</span>
+            <span style="${sizeColor}">${sizeStr}${sizeTick}</span>
             <span class="quality-tag ${qLabel}">${qText}</span>
           </div>
         </div>
@@ -1270,9 +1273,16 @@
       item.compressedDataUrl  = result.dataUrl;
       item.compressedSize     = result.bytes;
       item.compressQuality    = quality;
-      // Update thumbnail in queue
+      // Update thumbnail and size in queue
       const thumb = document.querySelector(`#item-${item.id} .thumb-wrap img`);
       if (thumb) thumb.src = result.dataUrl;
+      // Update size label in queue item
+      const sizeSpan = document.querySelector(`#item-${item.id} .item-meta span:first-child`);
+      if (sizeSpan) {
+        const kb = result.bytes / 1024;
+        sizeSpan.textContent = kb < 1000 ? Math.round(kb) + ' KB ✓' : (kb/1024).toFixed(1) + ' MB';
+        sizeSpan.style.color = '#15803d';
+      }
       updateSendBtn();
       btn.textContent = 'Applied ✓';
       setTimeout(() => { btn.textContent = 'Apply & confirm'; }, 1500);
