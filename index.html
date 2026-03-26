@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>RCPT — Receipt Scanner</title>
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1022,28 +1021,13 @@
 
   document.getElementById('emailInput').addEventListener('input', updateSendBtn);
 
-  /* ── EMAILJS CONFIG ── */
-  const EMAILJS_PUBLIC_KEY  = 'eVVEfK5-EQG4RlKxT';
-  const EMAILJS_SERVICE_ID  = 'service_6cf5zaj';
-  const EMAILJS_TEMPLATE_ID = 'template_onqly8z';
+  /* ── GOOGLE APPS SCRIPT CONFIG ── */
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbyULqRyUC6rK2izhJn0zc18zV94gfmPfhEH53FgcG-JdxqdloMBX6B1A5L8Xs5JMz9evg/exec';
 
-  emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
-
-  /* ── IMAGE → BASE64 ── */
-  function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = () => resolve(reader.result); // full data URI: "data:image/jpeg;base64,..."
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
-  /* ── RESIZE IMAGE for email embedding ── */
-  // EmailJS free tier has a ~50KB total payload limit.
-  // We compress aggressively: shrink to max 600px and reduce quality in steps
-  // until the base64 output is under 35KB (leaves room for the rest of the email).
-  function resizeImage(file) {
+  /* ── IMAGE → FULL QUALITY BASE64 ── */
+  // No compression needed — Google Apps Script has no payload limit!
+  // We still resize to 1600px max just to keep emails a sensible size.
+  function prepareImage(file) {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onerror = () => resolve(null);
@@ -1052,25 +1036,13 @@
         img.onerror = () => resolve(null);
         img.onload = () => {
           try {
-            // Step 1: shrink to max 600px on longest side
-            const maxDim = 600;
-            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const maxDim = 1600;
+            const scale  = Math.min(1, maxDim / Math.max(img.width, img.height));
             const canvas = document.createElement('canvas');
             canvas.width  = Math.round(img.width  * scale);
             canvas.height = Math.round(img.height * scale);
             canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-
-            // Step 2: reduce quality until under 35KB base64 (~26KB binary)
-            const targetBytes = 35 * 1024;
-            let quality = 0.7;
-            let dataUrl  = canvas.toDataURL('image/jpeg', quality);
-
-            while (dataUrl.length > targetBytes * 1.37 && quality > 0.1) {
-              quality -= 0.1;
-              dataUrl  = canvas.toDataURL('image/jpeg', quality);
-            }
-
-            resolve(dataUrl);
+            resolve(canvas.toDataURL('image/jpeg', 0.92));
           } catch (_) {
             resolve(e.target.result);
           }
@@ -1081,48 +1053,7 @@
     });
   }
 
-  /* ── BUILD HTML EMAIL BODY ── */
-  // Embeds each image inline so they display directly in the inbox
-  async function buildEmailBody(itemList, notes) {
-    const parts = await Promise.all(itemList.map(async (item, i) => {
-      // Use already-compressed version if user applied it, otherwise compress now
-      let dataUrl = item.compressedDataUrl || null;
-      if (!dataUrl) {
-        const result = await compressToQuality(item.file, 0.5);
-        dataUrl = result.dataUrl;
-      }
-      if (!dataUrl) return `<p style="color:#999">[Image ${i+1} could not be processed]</p>`;
-      return `
-        <div style="margin-bottom:24px">
-          <p style="font-family:monospace;font-size:12px;color:#666;margin:0 0 6px">
-            Receipt ${i + 1} of ${itemList.length} &mdash; ${escHtml(item.name)}
-          </p>
-          <img src="${dataUrl}"
-               style="max-width:100%;border:1px solid #e0e0e0;border-radius:4px;display:block"
-               alt="Receipt ${i+1}">
-        </div>`;
-    }));
-
-    const notesBlock = notes
-      ? `<p style="font-family:monospace;font-size:13px;background:#f5f5f5;padding:10px 14px;border-radius:4px;margin-bottom:20px">
-           <strong>Notes:</strong> ${escHtml(notes)}
-         </p>`
-      : '';
-
-    return `
-      <div style="font-family:sans-serif;max-width:640px;margin:0 auto">
-        <h2 style="font-family:monospace;font-size:16px;border-bottom:2px solid #C8102E;padding-bottom:8px;margin-bottom:16px">
-          RCPT &mdash; ${itemList.length} receipt${itemList.length > 1 ? 's' : ''} submitted
-        </h2>
-        ${notesBlock}
-        ${parts.join('')}
-        <p style="font-family:monospace;font-size:11px;color:#bbb;margin-top:32px;border-top:1px solid #eee;padding-top:12px">
-          Sent via RCPT Scanner
-        </p>
-      </div>`;
-  }
-
-  /* ── SEND ── */
+  /* ── SEND via Google Apps Script ── */
   async function handleSend() {
     const email = document.getElementById('emailInput').value.trim();
     const notes = document.getElementById('notesInput').value.trim();
@@ -1134,25 +1065,26 @@
     btn.disabled = true;
 
     try {
-      const htmlBody = await buildEmailBody(items, notes);
-      const count    = items.length;
+      // Prepare all images — use compressed version if user applied it, else full quality
+      const images = await Promise.all(items.map(async (item) => {
+        const dataUrl = item.compressedDataUrl || await prepareImage(item.file);
+        return { name: item.name, dataUrl };
+      }));
 
-      // Warn if payload is approaching EmailJS free tier limit (50KB)
-      const payloadSize = new Blob([htmlBody]).size;
-      if (payloadSize > 45000) {
-        showToast('Image too large for free plan — try a smaller file', 'error');
-        btn.classList.remove('loading');
-        updateSendBtn();
-        return;
-      }
+      const payload = JSON.stringify({ to: email, notes: notes || 'No notes', images });
 
-      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-        to_email: email,
-        notes:    notes || 'No notes',
-        message:  htmlBody,
+      const response = await fetch(GAS_URL, {
+        method:  'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body:    payload,
       });
 
+      const result = await response.json();
+
+      if (result.status !== 'ok') throw new Error(result.message || 'Unknown error');
+
       // Success — clear queue
+      const count = items.length;
       items.forEach(i => URL.revokeObjectURL(i.url));
       items = [];
       renderQueue();
@@ -1168,8 +1100,8 @@
       showToast('Sent ✓', 'success');
 
     } catch (err) {
-      console.error('EmailJS error:', err);
-      showToast('Send failed — check connection', 'error');
+      console.error('Send error:', err);
+      showToast('Send failed — ' + (err.message || 'check connection'), 'error');
     } finally {
       btn.classList.remove('loading');
       updateSendBtn();
