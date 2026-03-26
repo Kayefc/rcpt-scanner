@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RCPT">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="manifest" href="manifest.json">
 <title>RCPT — Receipt Scanner</title>
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -124,7 +130,39 @@
   }
   .email-input::placeholder { color: var(--grey-40); }
 
-  /* ── MODE TOGGLE ── */
+  /* ── RECIPIENTS BOX ── */
+  .recipients-box {
+    border: 1px solid var(--grey-15);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .recipient-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .recipient-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .recipient-dot.primary { background: var(--red); }
+  .recipient-dot.cc      { background: var(--grey-40); }
+  .recipient-addr {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--grey-70);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ── EMAIL INPUT (keep for updateSendBtn reference) ── */
+  .email-input { display: none; }
   .mode-toggle {
     display: flex;
     border: 1px solid var(--grey-15);
@@ -676,17 +714,18 @@
 
   <main>
 
-    <!-- EMAIL -->
+    <!-- RECIPIENTS (fixed) -->
     <div class="section">
-      <div class="section-label">Send to</div>
-      <div class="input-row">
-        <span class="input-icon">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="#999" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <polyline points="22,6 12,13 2,6" stroke="#999" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <input class="email-input" id="emailInput" type="email" placeholder="expenses@yourcompany.com" autocomplete="email">
+      <div class="section-label">Sending to</div>
+      <div class="recipients-box">
+        <div class="recipient-row">
+          <span class="recipient-dot primary"></span>
+          <span class="recipient-addr"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="0d65786f69626e23627f69687f7e236b7979393a637d344d6c7d7d2365786f69626e236e6260">[email&#160;protected]</a></span>
+        </div>
+        <div class="recipient-row">
+          <span class="recipient-dot cc"></span>
+          <span class="recipient-addr"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d9aaadbcafbcb799b4a0aaaebcbcadadb6b6adb1bfb8baadb6aba0f7bab6b4">[email&#160;protected]</a></span>
+        </div>
       </div>
     </div>
 
@@ -831,7 +870,7 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
   let mode = 'single';
   let items = []; // { id, file, url, name, size, quality, compressedDataUrl, compressedSize }
   let idCounter = 0;
@@ -997,15 +1036,14 @@
 
   /* ── SEND BTN STATE ── */
   function updateSendBtn() {
-    const btn = document.getElementById('sendBtn');
+    const btn        = document.getElementById('sendBtn');
     const summaryRow = document.getElementById('summaryRow');
-    const hasEmail = document.getElementById('emailInput').value.trim();
-    const hasItems = items.length > 0;
+    const hasItems   = items.length > 0;
 
     if (hasItems) {
       summaryRow.style.display = 'flex';
       document.getElementById('itemCount').textContent = items.length;
-      const totalBytes = items.reduce((s, i) => s + i.size, 0);
+      const totalBytes = items.reduce((s, i) => s + (i.compressedSize || i.size), 0);
       document.getElementById('totalSize').textContent = totalBytes > 1024*1024
         ? (totalBytes/(1024*1024)).toFixed(1) + ' MB'
         : Math.round(totalBytes/1024) + ' KB';
@@ -1013,16 +1051,15 @@
       summaryRow.style.display = 'none';
     }
 
-    btn.disabled = !(hasEmail && hasItems);
-    btn.textContent = '';
+    btn.disabled = !hasItems;
     const svg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><line x1="22" y1="2" x2="11" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polygon points="22 2 15 22 11 13 2 9 22 2" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`;
     btn.innerHTML = svg + ' ' + (items.length > 1 ? `Send ${items.length} Receipts` : 'Send Receipt');
   }
 
-  document.getElementById('emailInput').addEventListener('input', updateSendBtn);
-
   /* ── GOOGLE APPS SCRIPT CONFIG ── */
-  const GAS_URL = 'https://script.google.com/macros/s/AKfycbzhwYXDGnawk9kqTRpSrLohsiWO_WcVxC104wIFnU1zhmTQ06mWuB2cVoYOEZ_yv2rM3Q/exec';
+  const GAS_URL    = 'https://script.google.com/macros/s/AKfycbyPQrLuSsrhiggh0tnDdWeMdFUP3JBkoP53JqBsxVVfn-raQyF3gHl8V5HSOWCBBnmzXg/exec';
+  const PRIMARY_TO = 'hubdoc.orders.ftt47np9@app.hubdoc.com';
+  const CC_TO      = 'steven@mysweettoothfactory.com';
 
   /* ── IMAGE → FULL QUALITY BASE64 ── */
   // No compression needed — Google Apps Script has no payload limit!
@@ -1055,9 +1092,8 @@
 
   /* ── SEND via Google Apps Script ── */
   async function handleSend() {
-    const email = document.getElementById('emailInput').value.trim();
     const notes = document.getElementById('notesInput').value.trim();
-    if (!email || !items.length) return;
+    if (!items.length) return;
 
     const btn = document.getElementById('sendBtn');
     btn.classList.add('loading');
@@ -1065,13 +1101,17 @@
     btn.disabled = true;
 
     try {
-      // Prepare all images — use compressed version if user applied it, else full quality
       const images = await Promise.all(items.map(async (item) => {
         const dataUrl = item.compressedDataUrl || await prepareImage(item.file);
         return { name: item.name, dataUrl };
       }));
 
-      const payload = JSON.stringify({ to: email, notes: notes || 'No notes', images });
+      const payload = JSON.stringify({
+        to:    PRIMARY_TO,
+        cc:    CC_TO,
+        notes: notes || 'No notes',
+        images
+      });
 
       const response = await fetch(GAS_URL, {
         method:  'POST',
@@ -1080,10 +1120,8 @@
       });
 
       const result = await response.json();
-
       if (result.status !== 'ok') throw new Error(result.message || 'Unknown error');
 
-      // Success — clear queue
       const count = items.length;
       items.forEach(i => URL.revokeObjectURL(i.url));
       items = [];
@@ -1093,9 +1131,7 @@
 
       const banner = document.getElementById('successBanner');
       document.getElementById('successMsg').textContent =
-        count === 1
-          ? `Receipt sent to ${email}`
-          : `${count} receipts sent to ${email}`;
+        count === 1 ? `Receipt sent successfully` : `${count} receipts sent successfully`;
       banner.classList.add('visible');
       showToast('Sent ✓', 'success');
 
@@ -1246,18 +1282,4 @@
 
   /* ── TOAST ── */
   function showToast(msg, type = '') {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className = 'toast ' + type;
-    void t.offsetWidth;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2800);
-  }
-
-  /* ── UTILS ── */
-  function escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-</script>
-</body>
-</html>
+    const t = document.g

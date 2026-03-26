@@ -1,0 +1,22 @@
+{
+  "name": "RCPT Receipt Scanner",
+  "short_name": "RCPT",
+  "description": "Scan and send receipts instantly",
+  "start_url": "/rcpt-scanner/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0a0a0a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%230a0a0a'/><text x='96' y='130' font-family='monospace' font-weight='bold' font-size='80' text-anchor='middle' fill='white'>R.</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%230a0a0a'/><text x='256' y='340' font-family='monospace' font-weight='bold' font-size='220' text-anchor='middle' fill='white'>R.</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
