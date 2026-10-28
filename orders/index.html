@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Orders">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#3b2a20">
+<link rel="manifest" href="manifest.json">
+<title>Order Intake</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #faf7f3;
+    --card: #ffffff;
+    --ink: #2a211c;
+    --muted: #7a6d64;
+    --line: #e6ddd4;
+    --accent: #3b2a20;
+    --accent-ink: #ffffff;
+    --good: #2e7d4f;
+    --good-bg: #e5f4ea;
+    --warn: #9a6400;
+    --warn-bg: #fff2d6;
+    --bad: #b3261e;
+    --bad-bg: #fde4e2;
+    /* category colours, matched to the order sheet */
+    --c-round: #ffffff;
+    --c-loaf: #fff2cc;
+    --c-cupcake: #b6d7a8;
+    --c-brownie: #f9cb9c;
+    --c-blondie: #ead1dc;
+    --c-cookie: #cfe2f3;
+    --radius: 10px;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; -webkit-font-smoothing: antialiased; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+
+  .app { max-width: 960px; margin: 0 auto; padding: 0 16px 80px; }
+
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg);
+    padding: 14px 0 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .title { font-weight: 700; font-size: 18px; letter-spacing: .01em; }
+  .title small { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: 6px; }
+  nav { display: flex; gap: 4px; margin-top: 10px; overflow-x: auto; }
+  nav button {
+    background: none; border: 0; padding: 10px 12px; cursor: pointer;
+    border-bottom: 2px solid transparent; color: var(--muted); white-space: nowrap; font-weight: 500;
+  }
+  nav button.active { color: var(--ink); border-bottom-color: var(--accent); }
+  .pill { display: inline-block; min-width: 20px; padding: 1px 7px; border-radius: 20px; background: var(--accent); color: var(--accent-ink); font-size: 12px; text-align: center; }
+
+  section.tab { display: none; padding-top: 18px; }
+  section.tab.active { display: block; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  label.lbl { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--card);
+    padding: 10px 12px; outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  textarea { min-height: 160px; resize: vertical; line-height: 1.4; }
+
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .grow { flex: 1; min-width: 0; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+  .btn {
+    border: 1px solid var(--line); background: var(--card); border-radius: 8px;
+    padding: 10px 14px; cursor: pointer; font-weight: 500;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .btn.danger { color: var(--bad); }
+  .btn.small { padding: 6px 10px; font-size: 13px; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  .tag { font-size: 12px; padding: 2px 8px; border-radius: 20px; white-space: nowrap; font-weight: 500; }
+  .tag.good { background: var(--good-bg); color: var(--good); }
+  .tag.warn { background: var(--warn-bg); color: var(--warn); }
+  .tag.bad { background: var(--bad-bg); color: var(--bad); }
+
+  /* parsed items */
+  .items { display: flex; flex-direction: column; gap: 8px; }
+  .item {
+    display: grid; grid-template-columns: 70px 1fr auto 36px; gap: 8px; align-items: center;
+    border: 1px solid var(--line); border-left-width: 6px; border-radius: 8px; padding: 8px; background: var(--card);
+  }
+  .item .src { grid-column: 1 / -1; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .item .src b { font-weight: 500; color: var(--ink); }
+  .item input[type=number] { text-align: center; padding: 8px 4px; }
+  .item select { padding: 8px; }
+  .x { border: 0; background: none; font-size: 20px; color: var(--muted); cursor: pointer; height: 36px; }
+  .x:hover { color: var(--bad); }
+  @media (max-width: 560px) {
+    .item { grid-template-columns: 64px 1fr 36px; }
+    .item .tag { grid-column: 1 / -1; justify-self: start; order: 5; }
+  }
+
+  .cat-round   { border-left-color: #c9bfb6; }
+  .cat-loaf    { border-left-color: #e6c25a; }
+  .cat-cupcake { border-left-color: #7fb26a; }
+  .cat-brownie { border-left-color: #c9864a; }
+  .cat-blondie { border-left-color: #d496b0; }
+  .cat-cookie  { border-left-color: #7da7d6; }
+  .cat-none    { border-left-color: var(--bad); }
+
+  details.ignored { margin-top: 12px; }
+  details.ignored summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .ign { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .ign span { flex: 1; color: var(--muted); overflow-wrap: anywhere; }
+
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; margin-top: 14px; }
+
+  /* compiled sheet preview */
+  .sheet-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; max-height: 65vh; }
+  table.sheet { border-collapse: collapse; font-size: 12px; color: #222; }
+  table.sheet th, table.sheet td { border: 1px solid #d9d9d9; padding: 3px 6px; white-space: nowrap; height: 22px; }
+  table.sheet th { background: #f3f3f3; font-weight: 500; color: #666; position: sticky; top: 0; z-index: 1; }
+  table.sheet td.rn { background: #f3f3f3; color: #666; text-align: right; }
+  table.sheet td.A { background: #6fa8dc; text-align: center; font-weight: 700; }
+  table.sheet tr.r-shop td.A { background: #ffd966; }
+  table.sheet tr.r-shop td.B { font-weight: 700; background: #cccccc; }
+  table.sheet tr.r-shop td.data { background: #434343; }
+  table.sheet td.B, table.sheet td.C { background: var(--c-round); }
+  table.sheet td.D, table.sheet td.E { background: var(--c-loaf); }
+  table.sheet td.F, table.sheet td.G { background: var(--c-cupcake); }
+  table.sheet td.H.brownie, table.sheet td.I.brownie { background: var(--c-brownie); }
+  table.sheet td.H.blondie, table.sheet td.I.blondie { background: var(--c-blondie); }
+  table.sheet td.J, table.sheet td.K { background: var(--c-cookie); }
+  table.sheet td.C, table.sheet td.E, table.sheet td.G, table.sheet td.I, table.sheet td.K { text-align: center; }
+  table.sheet td.B, table.sheet td.D, table.sheet td.F, table.sheet td.H, table.sheet td.J { font-weight: 600; min-width: 150px; }
+
+  .orders-list { display: flex; flex-direction: column; gap: 6px; }
+  .order-row { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+  .order-row .n { width: 26px; height: 26px; border-radius: 50%; background: #ffd966; display: grid; place-items: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+  .order-row .nm { flex: 1; min-width: 0; }
+  .order-row .nm small { display: block; color: var(--muted); }
+
+  table.totals { width: 100%; border-collapse: collapse; }
+  table.totals td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  table.totals td:last-child { text-align: right; font-weight: 600; width: 60px; }
+  table.totals tr.head td { font-weight: 700; padding-top: 14px; border-bottom: 2px solid var(--line); }
+  .totals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+
+  .empty { text-align: center; color: var(--muted); padding: 30px 10px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(100px);
+    background: var(--accent); color: var(--accent-ink); padding: 10px 18px; border-radius: 30px;
+    transition: transform .2s; z-index: 50; max-width: calc(100% - 32px); text-align: center;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .settings-grid textarea { min-height: 220px; font-size: 13px; }
+  .editing-banner { background: var(--warn-bg); color: var(--warn); padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; display: none; }
+  .editing-banner.show { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="title">Order Intake <small>wholesale orders → sheet</small></div>
+    <nav>
+      <button data-tab="new" class="active">New order</button>
+      <button data-tab="sheet">Compiled sheet <span class="pill" id="orderCount">0</span></button>
+      <button data-tab="totals">Totals</button>
+      <button data-tab="settings">Settings</button>
+    </nav>
+  </header>
+
+  <!-- NEW ORDER -->
+  <section class="tab active" id="tab-new">
+    <div class="editing-banner" id="editingBanner">
+      <span>Editing order <b id="editingName"></b>. Approve to put it back.</span>
+      <button class="btn small" id="cancelEdit">Cancel edit</button>
+    </div>
+
+    <div class="card">
+      <label class="lbl" for="paste">Paste the order (email or WhatsApp)</label>
+      <textarea id="paste" placeholder="e.g.&#10;Hi! Order for Friday please:&#10;2 x carrot cake&#10;red velvet x2&#10;3 banana loaf&#10;12 white choc raspberry cookies&#10;Thanks, Kahaila"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="clearPaste">Clear</button>
+        <span class="grow"></span>
+        <button class="btn primary" id="parseBtn">Read order</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <label class="lbl" for="shop">Shop</label>
+      <div class="row">
+        <input type="text" id="shop" class="grow" list="shopList" placeholder="Shop name" autocomplete="off">
+        <span id="shopTag"></span>
+      </div>
+      <datalist id="shopList"></datalist>
+    </div>
+
+    <div class="card">
+      <div class="row" style="margin-bottom:10px">
+        <label class="lbl grow" style="margin:0">Items</label>
+        <button class="btn small" id="addItem">+ Add item</button>
+      </div>
+      <div class="items" id="items"></div>
+      <div class="empty" id="itemsEmpty">Paste an order above and tap <b>Read order</b>.</div>
+      <details class="ignored" id="ignoredBox" hidden>
+        <summary>Lines skipped (<span id="ignoredCount">0</span>), tap to check</summary>
+        <div id="ignored"></div>
+      </details>
+      <div class="actions">
+        <button class="btn danger" id="discard">Discard</button>
+        <button class="btn primary" id="approve">Approve &amp; add to sheet</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPILED SHEET -->
+  <section class="tab" id="tab-sheet">
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <b>Ready to paste</b>
+          <div class="hint">Copy, click the cell in your Google Sheet where shop no.1 goes (column A), and paste. Values only, so your sheet's colours stay put.</div>
+        </div>
+      </div>
+      <div class="actions" style="justify-content:flex-start">
+        <button class="btn primary" id="copyAll">Copy all</button>
+        <button class="btn" id="downloadCsv">Download CSV</button>
+        <span class="grow"></span>
+        <button class="btn danger" id="clearAll">Clear all orders</button>
+      </div>
+    </div>
+    <div class="sheet-wrap" id="sheetWrap"></div>
+    <div class="card" style="margin-top:14px">
+      <label class="lbl">Orders</label>
+      <div class="orders-list" id="ordersList"></div>
+    </div>
+  </section>
+
+  <!-- TOTALS -->
+  <section class="tab" id="tab-totals">
+    <div class="card">
+      <div class="row">
+        <div class="grow"><b>Totals across all approved orders</b><div class="hint">For checking against the menu totals sheet.</div></div>
+        <span class="tag good" id="grandTotal"></span>
+      </div>
+    </div>
+    <div class="totals-grid" id="totals"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="tab" id="tab-settings">
+    <div class="card">
+      <label class="lbl" for="spacer">Blank rows between shops</label>
+      <input type="number" id="spacer" min="0" max="20" style="max-width:120px">
+      <div class="hint">Added after each shop's block when copying.</div>
+    </div>
+    <div class="card">
+      <label class="lbl">Menu (one product per line, spelled exactly as in your sheet)</label>
+      <div class="settings-grid" id="catalogEditors"></div>
+      <div class="actions">
+        <button class="btn danger" id="resetMenu">Reset menu to default</button>
+        <button class="btn primary" id="saveMenu">Save menu</button>
+      </div>
+    </div>
+    <div class="card">
+      <label class="lbl" for="shopsEdit">Shops (one per line)</label>
+      <textarea id="shopsEdit"></textarea>
+      <div class="actions"><button class="btn primary" id="saveShops">Save shops</button></div>
+    </div>
+    <div class="card">
+      <label class="lbl">Learned matches</label>
+      <div class="hint" id="learnedInfo"></div>
+      <div class="actions"><button class="btn danger" id="clearLearned">Forget learned matches</button></div>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────────────── Data ───────────────────────────
+const CATS = [
+  { key: 'round',   label: 'Round Cakes',      group: 0 },
+  { key: 'loaf',    label: 'Loaf Cakes',       group: 1 },
+  { key: 'cupcake', label: 'Cupcakes',         group: 2 },
+  { key: 'brownie', label: 'Brownies',         group: 3 },
+  { key: 'blondie', label: 'Blondies/Bars',    group: 3 },
+  { key: 'cookie',  label: 'Cookies/Biscuits', group: 4 },
+];
+// Output column groups: [name col, qty col] → B/C, D/E, F/G, H/I, J/K
+const GROUP_COLS = [['B','C'],['D','E'],['F','G'],['H','I'],['J','K']];
+const COLS = ['A','B','C','D','E','F','G','H','I','J','K'];
+
+const DEFAULT_CATALOG = {
+  round: ['Red Velvet Cake','Classic Carrot Cake','Guinness Chocolate Cake','Rainbow Vanilla Cake','Lemon Raspberry White Choc Cake','Triple Chocolate Fudge Cake','Vegan Lemon Blueberry Drizzle Cake','Vegan Cookies and Cream Cake','Vegan Chocolate Biscoff Cake','Vanilla Biscoff Drip Cake','Banoffee Cake','Chocolate Salted Caramel Drip Cake','Cookie Dough Chocolate Drip Cake','Raspberry Rose Pistachio Cake','Victoria Sponge','Traybake Carrot Cake'],
+  loaf: ['Banana Nutella Chocolate Loaf','Chocolate Guinness Loaf','Classic Banana Loaf','Lemon Poppyseed Loaf','Red Velvet Loaf Cake','Sour Cherry Almond Strussel Loaf','Spiced Pumpkin Caramel Pecans loaf','Vegan Banana Pecan Caramel Loaf','Vegan Biscoff Chocolate Loaf','Vegan Choc Cherry Pistachio Loaf','Vegan lemon Blueberry Loaf','Wheat Free Clementine Choc Chip Loaf','Wheat Free Lemon Blueberry Loaf','Wheat Free Mango Passion Fruit Loaf','Wheat Free Raspberry Bakewell Loaf','Wheat Free Raspberry Rose Pistachio Loaf','Vegan Matcha and Strawberry Loaf','School Cake Loaf'],
+  cupcake: ['Red Velvet Cupcakes','Vanilla Cupcakes','Vegan Vanilla Sprinkles Cupcake','Salted Caramel Cupcakes'],
+  brownie: ['Classic Brownie','Cookie Dough Choc Chip Brownie','Cornflake Brownie','Raspberry Cheesecake Brownie','Salted Caramel Brownie','Vegan Biscoff Brownie','Wheat Free Chocolate Brownie','Wheat Free Salted Caramel Brownie','Red Velvet Cheesecake Brownie','Brookie Dulce Caramel Bar'],
+  blondie: ['Banana Nutella Blondie','Birthday Cake Blondie Bars','Seeded Fruit Flapjack','Millionaire Shortbread','Vegan Peanut Butter Choc Chip Blondie','Wheat Free Vegan Flapjack','Lemon Raspberry Blondie Bars','Bakewell Shortbread Blondie'],
+  cookie: ['White chocolate Raspberry Cookies','Chocolate Chunk Cookies','Vegan Biscoff Cookie','Peanut Butter Chunk Cookies','Dubai Triple Chocolate Cookies','Vegan Double Chocolate Cookies','Giant Jammie Dodgers','Wheat Free Vegan Anzac Cookie','Birthday Sprinkles NYC Cookie'],
+};
+const DEFAULT_SHOPS = ['Kahaila','A.V Fowlds & Son','Bon Bon Kensington','TAG Coffee','The Black Farmer (BRIXTON)','Today Bread','Resta Coffee',"Apple Tree Children's No1"];
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('oi.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('oi.' + k, JSON.stringify(v)); } catch {} },
+};
+
+let catalog  = store.get('catalog', DEFAULT_CATALOG);
+let shops    = store.get('shops', DEFAULT_SHOPS);
+let orders   = store.get('orders', []);           // [{shop, items:[{name, cat, qty}]}]
+let learned  = store.get('learned', {});          // normalised line → product name
+let learnedShops = store.get('learnedShops', {}); // normalised sender → shop
+let settings = store.get('settings', { spacer: 0 });
+let draft    = store.get('draft', { paste: '', shop: '', items: [], ignored: [], editing: null });
+
+// ─────────────────────────── Fuzzy matching ───────────────────────────
+const SYNONYMS = [
+  [/&|\+/g, ' and '],
+  [/\bw\/\s*/g, ' with '],
+  [/\b(gluten|wheat)[\s-]*free\b|\bg\/?f\b|\bw\/?f\b|\bwheatfree\b|\bglutenfree\b/g, ' wheatfree '],
+  [/\bchoc(s|o|olates?)?\b/g, ' chocolate '],
+  [/\bw(hite)?\s*chocolate\b|\bwc\b/g, ' white chocolate '],
+  [/\brv\b|\bred\s*velvet\b/g, ' red velvet '],
+  [/\bpb\b|\bpeanut\s*butter\b/g, ' peanut butter '],
+  [/\bs\.?c\b|\bsalt(ed)?\s*caramel\b/g, ' salted caramel '],
+  [/\bcc\b|\bchocolate\s*chips?\b/g, ' chocolate chip '],
+  [/\bvic(toria)?(\s*sponge)?\b/g, ' victoria sponge '],
+  [/\bb'?day\b|\bbirthday\b/g, ' birthday '],
+  [/\bjamm(y|ie|ies)\b/g, ' jammie '],
+  [/\bcup\s*cakes?\b|\bcupcakes?\b/g, ' cupcake '],
+  [/\bloa(f|fs|ves)\b|\bloaf\s*cakes?\b/g, ' loaf '],
+  [/\bbiscuits?\b|\bbiccies?\b|\bbikkies?\b/g, ' biscuit '],
+  [/\bpoppy\s*seed\b/g, ' poppyseed '],
+  [/\bpassion\s*fruit\b/g, ' passionfruit '],
+  [/\bmillionaires?'?s?\b/g, ' millionaire '],
+  [/\bstreusel\b|\bstrudel\b/g, ' strussel '],
+  [/\bvg\b|\bvegan\b/g, ' vegan '],
+  [/\bnyc?\b|\bnew\s*york\b/g, ' nyc '],
+];
+const STOP = new Set(['and','the','a','an','of','with','please','pls','plz','x','for','some','our','my','pcs','pc','piece','pieces','box','boxes','tray','trays','also','extra','more','each','qty','quantity','order','whole','slices','slice','units','unit','thanks','thank','you','can','we','have','get','just','again','too','as','usual','normal']);
+// category words → category hint
+const CAT_WORDS = { loaf: 'loaf', cupcake: 'cupcake', brownie: 'brownie', blondie: 'blondie', bar: 'blondie', flapjack: 'blondie', shortbread: 'blondie', cookie: 'cookie', biscuit: 'cookie', dodger: 'cookie', cake: 'round', sponge: 'round', drip: 'round' };
+
+function stem(w) {
+  if (w.length > 4 && w.endsWith('ies')) w = w.slice(0, -3) + 'ie';
+  else if (w.length > 3 && w.endsWith('es') && /(ch|sh|x)es$/.test(w)) w = w.slice(0, -2);
+  else if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) w = w.slice(0, -1);
+  return w;
+}
+function normText(s) {
+  s = ' ' + s.toLowerCase().replace(/[’`]/g, "'") + ' ';
+  for (const [re, rep] of SYNONYMS) s = s.replace(re, rep);
+  return s.replace(/[^a-z0-9' ]+/g, ' ').replace(/'/g, '').replace(/\s+/g, ' ').trim();
+}
+function tokens(s) {
+  return normText(s).split(' ').filter(Boolean).map(stem).filter(t => !STOP.has(t) && !/^\d+$/.test(t));
+}
+function lev(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 9;
+  const dp = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = dp[0]; dp[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = dp[j];
+      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = tmp;
+    }
+  }
+  return dp[b.length];
+}
+function tokSim(a, b) {
+  if (a === b) return 1;
+  const short = a.length < b.length ? a : b, long = a.length < b.length ? b : a;
+  if (short.length >= 4 && long.startsWith(short)) return 0.9;
+  if (short.length >= 4) {
+    const d = lev(a, b);
+    if (d === 1) return 0.85;
+    if (d === 2 && short.length >= 7) return 0.7;
+  }
+  return 0;
+}
+function catHint(toks) {
+  const found = toks.map(t => CAT_WORDS[t]).filter(Boolean);
+  if (!found.length) return null;
+  for (const c of ['loaf', 'cupcake']) if (found.includes(c)) return c;
+  const specific = found.filter(c => c !== 'round');
+  return specific.length ? specific[specific.length - 1] : 'round';
+}
+
+let INDEX = [];
+function buildIndex() {
+  const df = {};
+  const prods = [];
+  CATS.forEach(c => (catalog[c.key] || []).forEach((name, i) => {
+    const t = [...new Set(tokens(name))];
+    t.forEach(x => df[x] = (df[x] || 0) + 1);
+    prods.push({ name, cat: c.key, toks: t, order: prods.length });
+  }));
+  const N = prods.length;
+  const w = t => CAT_WORDS[t] ? 0.35 : Math.log(1 + N / (df[t] || 1));
+  prods.forEach(p => { p.w = p.toks.map(w); p.total = p.w.reduce((a, b) => a + b, 0) || 1; });
+  INDEX = { prods, w };
+}
+
+function matchProduct(text) {
+  const key = tokens(text).join(' ');
+  if (learned[key] && findProduct(learned[key])) return { name: learned[key], score: 1, learned: true };
+  const it = tokens(text);
+  if (!it.length) return { name: '', score: 0 };
+  const hint = catHint(it);
+  const iw = it.map(INDEX.w);
+  const inTotal = iw.reduce((a, b) => a + b, 0) || 1;
+  let best = null, second = null;
+  const full = []; // products containing every word the customer wrote
+  for (const p of INDEX.prods) {
+    let pm = 0;
+    const usedIn = new Array(it.length).fill(0);
+    p.toks.forEach((pt, k) => {
+      let bs = 0, bi = -1;
+      it.forEach((t, i) => { const s = tokSim(pt, t); if (s > bs) { bs = s; bi = i; } });
+      if (bi >= 0) { pm += bs * p.w[k]; usedIn[bi] = Math.max(usedIn[bi], bs); }
+    });
+    const im = usedIn.reduce((a, s, i) => a + s * iw[i], 0);
+    let score = 0.55 * (pm / p.total) + 0.45 * (im / inTotal);
+    if (hint) {
+      const same = hint === p.cat;
+      const near = (hint === 'brownie' || hint === 'blondie') && (p.cat === 'brownie' || p.cat === 'blondie');
+      score *= same ? 1.12 : near ? 0.85 : 0.55;
+    }
+    score -= p.order * 0.0002; // prefer earlier (more common) menu items on ties
+    const cand = { name: p.name, score, cov: im / inTotal };
+    if (!best || score > best.score) { second = best; best = cand; }
+    else if (!second || score > second.score) second = cand;
+    if (cand.cov >= 0.9) full.push(cand);
+  }
+  best.score = Math.max(0, Math.min(1, best.score));
+  // flag close calls, e.g. "banana nutella" could be the blondie or the loaf
+  const rival = best.cov >= 0.9 && best.score < 0.99 && full.filter(c => c !== best).sort((a, b) => b.score - a.score)[0];
+  if (second && best.score - second.score < 0.08) best.alt = second.name;
+  else if (rival && rival.score > 0.4) best.alt = rival.name;
+  return { name: best.name, score: best.score, alt: best.alt };
+}
+function findProduct(name) {
+  for (const c of CATS) if ((catalog[c.key] || []).includes(name)) return { name, cat: c.key };
+  return null;
+}
+
+function matchShop(text) {
+  const key = normText(text);
+  if (!key) return null;
+  if (learnedShops[key] && shops.includes(learnedShops[key])) return learnedShops[key];
+  const it = tokens(text);
+  let best = null, bestScore = 0;
+  for (const s of shops) {
+    const st = tokens(s).filter(t => !['coffee','cafe','the','son','ltd','no1'].includes(t));
+    if (!st.length) continue;
+    const hit = st.filter(t => it.some(x => tokSim(t, x) >= 0.85)).length;
+    const score = hit / st.length;
+    if (score > bestScore) { bestScore = score; best = s; }
+  }
+  return bestScore >= 0.99 ? best : null;
+}
+
+// ─────────────────────────── Parsing ───────────────────────────
+const NUM_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, dozen: 12 };
+const DATEISH = /\b(mon|tue|tues|wed|wednes|thu|thur|thurs|fri|sat|satur|sun)(day)?\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b|\b\d{1,2}(st|nd|rd|th)\b|\b\d{1,2}[\/.]\d{1,2}([\/.]\d{2,4})?\b|\b\d{1,2}:\d{2}\b|\b(am|pm)\b|@|\bwww\.|\bhttps?:|\+?\d{5,}/i;
+const CHATTER = /^(hi|hello|hey|morning|good morning|afternoon|dear|thanks|thank you|cheers|many thanks|best|kind regards|regards|best wishes|sent from|from:|to:|subject:|date:|cc:|order|our order|please|can we|could we|x+|xx+)\b/i;
+const WA_PREFIX = /^\[?\d{1,2}[\/.]\d{1,2}[\/.]\d{2,4},?\s+\d{1,2}[:.]\d{2}(?:[:.]\d{2})?\s*(?:[ap]\.?m\.?)?\]?\s*[-–]?\s*([^:]{1,60}):\s*/i;
+
+function extractQty(line) {
+  let s = line, qty = null, m;
+  const take = (re, g = 1) => { const mm = s.match(re); if (mm) { qty = parseInt(mm[g], 10); s = s.replace(re, ' '); } return !!mm; };
+  if (take(/^\s*(\d{1,4})\s*(?:x|×|\*|pcs?|no\.?|units?|boxes?)?\s*(?:of\s+)?(?=[a-z])/i)) {}
+  else if (take(/(?:x|×|\*)\s*(\d{1,4})\s*\)?\s*$/i)) {}
+  else if (take(/(?:^|\s)(\d{1,4})\s*(?:x|×)(?=\s|$)/i)) {}
+  else if (take(/[-–:=]\s*(\d{1,4})\s*(?:pcs?|units?|boxes?|of)?\s*$/i)) {}
+  else if (take(/\(\s*(\d{1,4})\s*\)/)) {}
+  else if (take(/\s(\d{1,4})\s*(?:pcs?|units?|boxes?)?\s*$/i)) {}
+  else if ((m = s.match(/^\s*(half\s+(?:a\s+)?dozen)\b/i))) { qty = 6; s = s.replace(m[0], ' '); }
+  else if ((m = s.match(/^\s*(?:a\s+)?(dozen|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty)\b/i))) {
+    qty = NUM_WORDS[m[1].toLowerCase()]; s = s.replace(m[0], ' ');
+  }
+  return { qty, rest: s.replace(/\s+/g, ' ').trim() };
+}
+
+function splitLines(text) {
+  const out = [];
+  let sender = null;
+  for (let raw of text.split(/\r?\n/)) {
+    const wa = raw.match(WA_PREFIX);
+    if (wa) { sender = sender || wa[1].trim(); raw = raw.slice(wa[0].length); }
+    raw = raw.replace(/^\s*[-•*·>–]+\s*/, '').trim();
+    if (!raw) continue;
+    // split "2 carrot, 3 banana loaf" / "2 carrot and 3 banana" into separate items
+    const parts = raw.split(/\s*[;,]\s*|\s+(?:and|&|\+)\s+(?=\d)/i).filter(Boolean);
+    parts.forEach(p => out.push(p.trim()));
+  }
+  return { lines: out, sender };
+}
+
+function parseOrder(text) {
+  buildIndex();
+  const { lines, sender } = splitLines(text);
+  const items = [], ignored = [];
+  let shop = sender ? matchShop(sender) : null;
+  for (const line of lines) {
+    if (!shop) { const s = matchShop(line); if (s && tokens(line).length <= tokens(s).length + 3) { shop = s; ignored.push(line); continue; } }
+    const { qty, rest } = extractQty(line);
+    const m = matchProduct(rest);
+    const looksChatty = CHATTER.test(line) || DATEISH.test(line);
+    if (qty == null) {
+      if (m.score >= 0.6 && !CHATTER.test(line)) items.push(mkItem(line, 1, m, true));
+      else ignored.push(line);
+      continue;
+    }
+    if (m.score < 0.3 && looksChatty) { ignored.push(line); continue; }
+    items.push(mkItem(line, qty, m.score >= 0.25 ? m : { name: '', score: 0 }));
+  }
+  return { items, ignored, shop, sender };
+}
+function mkItem(src, qty, m, qtyGuessed = false) {
+  return { src, qty, name: m.name, auto: m.name, score: m.score, alt: m.alt || null, learned: !!m.learned, qtyGuessed };
+}
+
+// ─────────────────────────── UI helpers ───────────────────────────
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200); }
+function saveDraft() { store.set('draft', draft); }
+
+function productOptions(selected) {
+  let h = `<option value="">— Pick a product —</option>`;
+  for (const c of CATS) {
+    h += `<optgroup label="${esc(c.label)}">`;
+    for (const n of catalog[c.key] || []) h += `<option${n === selected ? ' selected' : ''}>${esc(n)}</option>`;
+    h += `</optgroup>`;
+  }
+  return h;
+}
+function confTag(it) {
+  if (!it.name) return `<span class="tag bad">Not matched</span>`;
+  if (it.name !== it.auto) return `<span class="tag good">Changed</span>`;
+  if (it.learned) return `<span class="tag good">Remembered</span>`;
+  if (it.alt) return `<span class="tag warn">Check</span>`;
+  if (it.score >= 0.72) return `<span class="tag good">Confident</span>`;
+  if (it.score >= 0.5) return `<span class="tag warn">Check</span>`;
+  return `<span class="tag bad">Unsure</span>`;
+}
+
+function renderItems() {
+  const box = $('#items');
+  box.innerHTML = draft.items.map((it, i) => {
+    const p = findProduct(it.name);
+    return `<div class="item cat-${p ? p.cat : 'none'}" data-i="${i}">
+      <input type="number" min="0" inputmode="numeric" value="${it.qty ?? ''}" data-f="qty" aria-label="Quantity">
+      <select data-f="name" aria-label="Product">${productOptions(it.name)}</select>
+      ${confTag(it)}
+      <button class="x" data-f="del" title="Remove">×</button>
+      ${it.src ? `<div class="src">From: <b>${esc(it.src)}</b>${it.qtyGuessed ? ' (no quantity found, set to 1)' : ''}${it.alt && it.name === it.auto ? ` · could also be <b>${esc(it.alt)}</b>` : ''}</div>` : ''}
+    </div>`;
+  }).join('');
+  $('#itemsEmpty').style.display = draft.items.length ? 'none' : '';
+  const ig = $('#ignoredBox');
+  ig.hidden = !draft.ignored.length;
+  $('#ignoredCount').textContent = draft.ignored.length;
+  $('#ignored').innerHTML = draft.ignored.map((l, i) => `<div class="ign"><span>${esc(l)}</span><button class="btn small" data-ign="${i}">+ Add as item</button></div>`).join('');
+  $('#editingBanner').classList.toggle('show', draft.editing != null);
+  if (draft.editing != null) $('#editingName').textContent = draft.shop || '';
+  renderShopTag();
+}
+function renderShopTag() {
+  const v = $('#shop').value.trim();
+  $('#shopTag').innerHTML = !v ? '' : shops.includes(v) ? '<span class="tag good">Known shop</span>' : '<span class="tag warn">New shop</span>';
+}
+
+$('#items').addEventListener('input', e => {
+  const row = e.target.closest('.item'); if (!row) return;
+  const it = draft.items[+row.dataset.i];
+  if (e.target.dataset.f === 'qty') { it.qty = e.target.value === '' ? null : +e.target.value; it.qtyGuessed = false; saveDraft(); }
+});
+$('#items').addEventListener('change', e => {
+  const row = e.target.closest('.item'); if (!row) return;
+  const it = draft.items[+row.dataset.i];
+  if (e.target.dataset.f === 'name') { it.name = e.target.value; saveDraft(); renderItems(); }
+});
+$('#items').addEventListener('click', e => {
+  if (e.target.dataset.f !== 'del') return;
+  const i = +e.target.closest('.item').dataset.i;
+  const it = draft.items.splice(i, 1)[0];
+  if (it.src) draft.ignored.push(it.src);
+  saveDraft(); renderItems();
+});
+$('#ignored').addEventListener('click', e => {
+  const i = e.target.dataset.ign; if (i == null) return;
+  const line = draft.ignored.splice(+i, 1)[0];
+  buildIndex();
+  const { qty, rest } = extractQty(line);
+  draft.items.push(mkItem(line, qty ?? 1, matchProduct(rest), qty == null));
+  saveDraft(); renderItems();
+});
+$('#addItem').onclick = () => { draft.items.push({ src: '', qty: 1, name: '', auto: '', score: 0 }); saveDraft(); renderItems(); };
+
+function runParse() {
+  const text = $('#paste').value;
+  draft.paste = text;
+  if (!text.trim()) { draft.items = []; draft.ignored = []; saveDraft(); renderItems(); return; }
+  const r = parseOrder(text);
+  draft.items = r.items; draft.ignored = r.ignored; draft.sender = r.sender || null;
+  if (r.shop) $('#shop').value = draft.shop = r.shop;
+  else if (!$('#shop').value && r.sender) $('#shop').value = draft.shop = r.sender;
+  saveDraft(); renderItems();
+}
+$('#parseBtn').onclick = runParse;
+$('#paste').addEventListener('paste', () => setTimeout(runParse, 0));
+$('#paste').addEventListener('input', () => { draft.paste = $('#paste').value; saveDraft(); });
+$('#shop').addEventListener('input', () => { draft.shop = $('#shop').value; saveDraft(); renderShopTag(); });
+$('#clearPaste').onclick = () => { $('#paste').value = ''; draft.paste = ''; saveDraft(); $('#paste').focus(); };
+
+function resetDraft() {
+  draft = { paste: '', shop: '', items: [], ignored: [], editing: null };
+  $('#paste').value = ''; $('#shop').value = '';
+  saveDraft(); renderItems();
+}
+$('#discard').onclick = () => {
+  if (draft.editing != null) return cancelEdit();
+  if (draft.items.length && !confirm('Discard this order?')) return;
+  resetDraft();
+};
+function cancelEdit() {
+  const o = draft.editing;
+  if (o && o.order) { orders.splice(Math.min(o.index, orders.length), 0, o.order); store.set('orders', orders); renderSheet(); }
+  resetDraft();
+  toast('Edit cancelled, original order kept');
+}
+$('#cancelEdit').onclick = cancelEdit;
+
+$('#approve').onclick = () => {
+  const shop = $('#shop').value.trim();
+  if (!shop) { toast('Add the shop name first'); $('#shop').focus(); return; }
+  const items = draft.items.filter(it => it.qty !== 0);
+  if (!items.length) { toast('No items to add'); return; }
+  if (items.some(it => !it.name)) { toast('Pick a product for every item (or remove it)'); return; }
+  if (items.some(it => !it.qty || it.qty < 0)) { toast('Check the quantities'); return; }
+
+  // learn from this order: each source line → the product it ended up as
+  items.forEach(it => { if (it.src) { const k = tokens(extractQty(it.src).rest).join(' '); if (k) learned[k] = it.name; } });
+  store.set('learned', learned);
+  if (!shops.includes(shop)) { shops.push(shop); store.set('shops', shops); renderShopList(); }
+  if (draft.sender && normText(draft.sender) !== normText(shop)) { learnedShops[normText(draft.sender)] = shop; store.set('learnedShops', learnedShops); }
+
+  // merge duplicate products, keep first-seen order
+  const merged = [];
+  items.forEach(it => {
+    const ex = merged.find(m => m.name === it.name);
+    if (ex) ex.qty += it.qty; else merged.push({ name: it.name, cat: findProduct(it.name).cat, qty: it.qty });
+  });
+  const order = { shop, items: merged, src: draft.paste };
+  if (draft.editing != null) orders.splice(Math.min(draft.editing.index, orders.length), 0, order);
+  else orders.push(order);
+  store.set('orders', orders);
+  const wasEdit = draft.editing != null;
+  resetDraft(); renderSheet();
+  toast(`${shop} ${wasEdit ? 'updated' : 'added'} (${orders.length} shop${orders.length === 1 ? '' : 's'} in the sheet)`);
+};
+
+// ─────────────────────────── Compiled sheet ───────────────────────────
+function buildRows() {
+  // each row: array of 11 cells (A–K) + meta for preview colouring
+  const rows = [];
+  orders.forEach((o, n) => {
+    rows.push({ type: 'shop', cells: [String(n + 1), o.shop, '', '', '', '', '', '', '', '', ''] });
+    const groups = [[], [], [], [], []];
+    // brownies before blondies in column H, everything else in order received
+    const sorted = [...o.items].sort((a, b) => (a.cat === 'blondie') - (b.cat === 'blondie'));
+    sorted.forEach(it => {
+      const c = CATS.find(c => c.key === it.cat) || CATS[0];
+      groups[c.group].push(it);
+    });
+    const h = Math.max(1, ...groups.map(g => g.length));
+    for (let r = 0; r < h; r++) {
+      const cells = new Array(11).fill(''); const hcat = groups[3][r] ? groups[3][r].cat : null;
+      groups.forEach((g, gi) => {
+        if (!g[r]) return;
+        const ni = COLS.indexOf(GROUP_COLS[gi][0]);
+        cells[ni] = g[r].name; cells[ni + 1] = String(g[r].qty);
+      });
+      rows.push({ type: 'item', cells, hcat });
+    }
+    for (let s = 0; s < (settings.spacer || 0); s++) rows.push({ type: 'blank', cells: new Array(11).fill('') });
+  });
+  return rows;
+}
+
+function renderSheet() {
+  $('#orderCount').textContent = orders.length;
+  const rows = buildRows();
+  if (!rows.length) {
+    $('#sheetWrap').innerHTML = '<div class="empty">No approved orders yet.</div>';
+  } else {
+    let h = '<table class="sheet"><thead><tr><th></th>' + COLS.map(c => `<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+    rows.forEach((r, i) => {
+      h += `<tr class="r-${r.type}"><td class="rn">${i + 1}</td>`;
+      r.cells.forEach((v, ci) => {
+        const col = COLS[ci];
+        let cls = col + (r.type === 'shop' && ci > 1 ? ' data' : '');
+        if (r.type !== 'shop' && (col === 'H' || col === 'I')) cls += ' ' + (r.hcat || (i % 2 ? 'blondie' : 'brownie'));
+        h += `<td class="${cls}">${esc(v)}</td>`;
+      });
+      h += '</tr>';
+    });
+    $('#sheetWrap').innerHTML = h + '</tbody></table>';
+  }
+  $('#ordersList').innerHTML = orders.length ? orders.map((o, i) => {
+    const total = o.items.reduce((a, b) => a + b.qty, 0);
+    return `<div class="order-row"><span class="n">${i + 1}</span>
+      <span class="nm">${esc(o.shop)}<small>${o.items.length} line${o.items.length === 1 ? '' : 's'}, ${total} item${total === 1 ? '' : 's'}</small></span>
+      <button class="btn small" data-up="${i}" ${i === 0 ? 'disabled' : ''} title="Move up">↑</button>
+      <button class="btn small" data-copy="${i}">Copy</button>
+      <button class="btn small" data-edit="${i}">Edit</button>
+      <button class="btn small danger" data-del="${i}">Delete</button></div>`;
+  }).join('') : '<div class="empty">Approved orders appear here.</div>';
+  renderTotals();
+}
+
+function tsv(rows) { return rows.map(r => r.cells.map(v => v.replace(/[\t\n]/g, ' ')).join('\t')).join('\n'); }
+async function copyText(text, msg) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+  }
+  toast(msg);
+}
+$('#copyAll').onclick = () => {
+  if (!orders.length) return toast('Nothing to copy yet');
+  copyText(tsv(buildRows()), `Copied ${orders.length} shop${orders.length === 1 ? '' : 's'}, paste into column A`);
+};
+$('#downloadCsv').onclick = () => {
+  if (!orders.length) return toast('Nothing to download yet');
+  const csv = buildRows().map(r => r.cells.map(v => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$('#clearAll').onclick = () => {
+  if (!orders.length) return;
+  if (!confirm(`Clear all ${orders.length} orders? Do this after you've pasted them into Google Sheets.`)) return;
+  orders = []; store.set('orders', orders); renderSheet(); toast('Cleared');
+};
+$('#ordersList').addEventListener('click', e => {
+  const d = e.target.dataset;
+  if (d.del != null) {
+    const o = orders[+d.del];
+    if (!confirm(`Delete ${o.shop}'s order?`)) return;
+    orders.splice(+d.del, 1); store.set('orders', orders); renderSheet();
+  } else if (d.up != null) {
+    const i = +d.up; [orders[i - 1], orders[i]] = [orders[i], orders[i - 1]]; store.set('orders', orders); renderSheet();
+  } else if (d.copy != null) {
+    // copy just this shop's block, numbered as it sits in the full list
+    const all = buildRows(); let n = -1;
+    const block = all.filter(r => { if (r.type === 'shop') n++; return n === +d.copy; });
+    copyText(tsv(block), `Copied ${orders[+d.copy].shop}`);
+  } else if (d.edit != null) {
+    if (draft.items.length && draft.editing == null && !confirm('You have an unsaved order in New order. Replace it?')) return;
+    if (draft.editing != null) cancelEdit();
+    const i = +d.edit, o = orders.splice(i, 1)[0];
+    store.set('orders', orders);
+    draft = {
+      paste: o.src || '', shop: o.shop, ignored: [], editing: { index: i, order: o },
+      items: o.items.map(it => ({ src: '', qty: it.qty, name: it.name, auto: it.name, score: 1, learned: true })),
+    };
+    $('#paste').value = draft.paste; $('#shop').value = draft.shop;
+    saveDraft(); renderItems(); renderSheet(); showTab('new');
+  }
+});
+
+// ─────────────────────────── Totals ───────────────────────────
+function renderTotals() {
+  const sums = {};
+  orders.forEach(o => o.items.forEach(it => sums[it.name] = (sums[it.name] || 0) + it.qty));
+  let grand = 0;
+  $('#totals').innerHTML = CATS.map(c => {
+    const list = catalog[c.key] || [];
+    const extra = Object.keys(sums).filter(n => !list.includes(n) && orders.some(o => o.items.some(i => i.name === n && i.cat === c.key)));
+    let sub = 0;
+    const rows = [...list, ...extra].map(n => { const v = sums[n] || 0; sub += v; return `<tr><td>${esc(n)}</td><td>${v || ''}</td></tr>`; }).join('');
+    grand += sub;
+    return `<div class="card"><table class="totals"><tr class="head"><td>${esc(c.label)}</td><td>${sub}</td></tr>${rows}</table></div>`;
+  }).join('');
+  $('#grandTotal').textContent = `Total ${grand}`;
+}
+
+// ─────────────────────────── Settings ───────────────────────────
+function renderSettings() {
+  $('#spacer').value = settings.spacer || 0;
+  $('#catalogEditors').innerHTML = CATS.map(c => `<div><label class="lbl" for="cat-${c.key}">${esc(c.label)}</label><textarea id="cat-${c.key}">${esc((catalog[c.key] || []).join('\n'))}</textarea></div>`).join('');
+  $('#shopsEdit').value = shops.join('\n');
+  const n = Object.keys(learned).length + Object.keys(learnedShops).length;
+  $('#learnedInfo').textContent = n ? `${n} remembered match${n === 1 ? '' : 'es'}. Each time you approve an order, the app remembers how each line was matched, so the same wording is recognised next time.` : 'Nothing learned yet. The app remembers your corrections each time you approve an order.';
+}
+function renderShopList() { $('#shopList').innerHTML = shops.map(s => `<option value="${esc(s)}">`).join(''); }
+const lines = v => v.split('\n').map(s => s.trim()).filter(Boolean);
+$('#spacer').onchange = () => { settings.spacer = Math.max(0, Math.min(20, +$('#spacer').value || 0)); store.set('settings', settings); renderSheet(); };
+$('#saveMenu').onclick = () => {
+  CATS.forEach(c => catalog[c.key] = lines($('#cat-' + c.key).value));
+  store.set('catalog', catalog); buildIndex(); renderItems(); renderTotals(); toast('Menu saved');
+};
+$('#resetMenu').onclick = () => {
+  if (!confirm('Reset the menu to the original product list?')) return;
+  catalog = JSON.parse(JSON.stringify(DEFAULT_CATALOG)); store.set('catalog', catalog); buildIndex(); renderSettings(); renderItems(); toast('Menu reset');
+};
+$('#saveShops').onclick = () => { shops = lines($('#shopsEdit').value); store.set('shops', shops); renderShopList(); renderShopTag(); toast('Shops saved'); };
+$('#clearLearned').onclick = () => {
+  if (!confirm('Forget all remembered matches?')) return;
+  learned = {}; learnedShops = {}; store.set('learned', learned); store.set('learnedShops', learnedShops); renderSettings(); toast('Forgotten');
+};
+
+// ─────────────────────────── Tabs & init ───────────────────────────
+function showTab(name) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
+  if (name === 'settings') renderSettings();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+buildIndex();
+renderShopList();
+$('#paste').value = draft.paste || '';
+$('#shop').value = draft.shop || '';
+renderItems();
+renderSheet();
+</script>
+</body>
+</html>

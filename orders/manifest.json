@@ -1,0 +1,17 @@
+{
+  "name": "Order Intake",
+  "short_name": "Orders",
+  "description": "Turn shop orders from email and WhatsApp into rows for the order sheet",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#faf7f3",
+  "theme_color": "#3b2a20",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='36' fill='%233b2a20'/><text x='96' y='128' font-family='sans-serif' font-weight='bold' font-size='96' text-anchor='middle' fill='%23f9cb9c'>O</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
