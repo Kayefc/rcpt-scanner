@@ -58,6 +58,13 @@
   [hidden] { display: none !important; }
 
   .app { max-width: 920px; margin: 0 auto; padding: 16px 16px 96px; }
+  /* desktop: the pasted message and the matched items side by side */
+  @media (min-width: 980px) {
+    .app { max-width: 1240px; }
+    .panes { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 14px; align-items: start; }
+    .paste-card { position: sticky; top: 64px; }
+    .paste-card textarea { min-height: max(320px, calc(100vh - 330px)); }
+  }
 
   /* station sign masthead */
   .sign { background: #000; color: #fff; border-radius: var(--radius); padding: 18px 20px 16px; display: grid; gap: 12px; }
@@ -175,7 +182,7 @@
   .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; margin-top: 16px; }
 
   /* compiled sheet preview */
-  .sheet-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--sh-bg); max-height: 65vh; }
+  .sheet-wrap { margin-bottom: 14px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--sh-bg); max-height: 65vh; }
   table.sheet { border-collapse: collapse; font-size: 12px; color: var(--sh-ink); font-family: Arial, sans-serif; }
   table.sheet th, table.sheet td { border: 1px solid var(--sh-grid); padding: 3px 6px; white-space: nowrap; height: 22px; }
   table.sheet th { background: var(--sh-head); font-weight: 500; color: var(--sh-head-ink); position: sticky; top: 0; z-index: 1; }
@@ -267,16 +274,6 @@
     </div>
 
     <div class="card">
-      <label class="lbl" for="paste">Paste the order (email or WhatsApp)</label>
-      <textarea id="paste" placeholder="e.g.&#10;Hi! Order for Friday please:&#10;2 x carrot cake&#10;red velvet x2&#10;3 banana loaf&#10;12 white choc raspberry cookies&#10;Thanks, Kahaila"></textarea>
-      <div class="row" style="margin-top:10px">
-        <button class="btn" id="clearPaste">Clear</button>
-        <span class="grow"></span>
-        <button class="btn primary" id="parseBtn">Read order</button>
-      </div>
-    </div>
-
-    <div class="card">
       <label class="lbl" for="shop">Shop</label>
       <div class="row">
         <input type="text" id="shop" class="grow" list="shopList" placeholder="Shop name" autocomplete="off">
@@ -286,7 +283,17 @@
       <div class="row" id="shopSuggest" style="margin-top:8px" hidden></div>
     </div>
 
-    <div class="card">
+    <div class="panes">
+    <div class="card paste-card">
+      <label class="lbl" for="paste">Paste the order (email or WhatsApp)</label>
+      <textarea id="paste" placeholder="e.g.&#10;Hi! Order for Friday please:&#10;2 x carrot cake&#10;red velvet x2&#10;3 banana loaf&#10;12 white choc raspberry cookies&#10;Thanks, Kahaila"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="clearPaste">Clear</button>
+        <span class="grow"></span>
+        <button class="btn primary" id="parseBtn">Read order</button>
+      </div>
+    </div>
+    <div class="card items-card">
       <div class="row" style="margin-bottom:10px">
         <label class="lbl grow" style="margin:0">Items</label>
         <button class="btn small" id="addItem">+ Add item</button>
@@ -297,7 +304,7 @@
         <div class="cats" id="catCount"></div>
       </div>
       <div class="items" id="items"></div>
-      <div class="empty" id="itemsEmpty">Paste an order above and tap <b>Read order</b>.</div>
+      <div class="empty" id="itemsEmpty">Paste an order and tap <b>Read order</b>.</div>
       <details class="ignored" id="ignoredBox" hidden>
         <summary>Lines skipped (<span id="ignoredCount">0</span>), tap to check</summary>
         <div id="ignored"></div>
@@ -306,6 +313,7 @@
         <button class="btn danger" id="discard">Discard</button>
         <button class="btn primary" id="approve">Approve &amp; add to sheet</button>
       </div>
+    </div>
     </div>
   </section>
 
@@ -320,13 +328,14 @@
       </div>
       <div class="actions" style="justify-content:flex-start">
         <button class="btn primary" id="sendSheet">Send to Google Sheet</button>
+        <button class="btn" id="togglePreview" aria-expanded="false" aria-controls="sheetWrap">Preview sheet</button>
         <button class="btn" id="copyAll">Copy all</button>
         <button class="btn" id="downloadCsv">Download CSV</button>
         <span class="grow"></span>
         <button class="btn danger" id="clearAll">Clear all orders</button>
       </div>
     </div>
-    <div class="sheet-wrap" id="sheetWrap"></div>
+    <div class="sheet-wrap" id="sheetWrap" hidden></div>
     <div class="card" style="margin-top:14px">
       <label class="lbl">Orders</label>
       <div class="orders-list" id="ordersList"></div>
@@ -1187,6 +1196,15 @@ async function copyText(text, msg) {
   }
   toast(msg);
 }
+// the spreadsheet preview stays folded away until asked for (remembered per device)
+function setPreview(open) {
+  $('#sheetWrap').hidden = !open;
+  $('#togglePreview').setAttribute('aria-expanded', String(open));
+  $('#togglePreview').textContent = open ? 'Hide preview' : 'Preview sheet';
+  store.set('preview', open);
+}
+$('#togglePreview').onclick = () => setPreview($('#sheetWrap').hidden);
+setPreview(!!store.get('preview', false));
 $('#copyAll').onclick = () => {
   if (!orders.length) return toast('Nothing to copy yet');
   copyText(tsv(buildRows()), `Copied ${orders.length} shop${orders.length === 1 ? '' : 's'}, paste into column A`);
