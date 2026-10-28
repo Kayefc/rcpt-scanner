@@ -363,7 +363,8 @@
       <div id="gsSetup">
         <ol class="steps">
           <li><div>Go to <b>script.google.com</b> and click <b>New project</b>. Delete what's in the editor, paste the script, and click Save. <button class="btn small" id="copyScript">Copy script</button></div></li>
-          <li><div>Click <b>Deploy → New deployment</b>. Choose type <b>Web app</b>, set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>, then click <b>Deploy</b>. Allow access when Google asks: the script needs your Drive to find each day's order sheet.</div></li>
+          <li><div>With <b>authorize</b> selected in the menu at the top, click <b>Run</b>. Click <b>Review permissions</b> and choose your account. If Google says it hasn't verified the app, click <b>Advanced → Go to</b> your project (it's your own script). Tick <b>Select all</b>, then <b>Continue</b>. The script needs your Drive to find each day's order sheet.</div></li>
+          <li><div>Click <b>Deploy → New deployment</b>. Choose type <b>Web app</b>, set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>, then click <b>Deploy</b>.</div></li>
           <li><div>Paste the <b>Web app URL</b> below, add the link to your master database, and click <b>Connect</b>.</div></li>
         </ol>
         <div class="hint" style="margin:-4px 0 14px">This is set up once. Each new delivery sheet you copy is found automatically. "Anyone" lets the app reach the script without a Google sign-in; the script only accepts requests carrying this app's private key, which is built into the script you copy.</div>
@@ -445,6 +446,15 @@
 // and adds approved orders to an "Incoming Orders" tab in that file, formatted like
 // Shop Orders with working dropdowns. It never changes any other tab.
 const KEY = '__KEY__';
+
+// Run this once from the editor (it is selected by default; click Run) and tick
+// "Select all" when Google asks, so the script can find your delivery sheets in Drive.
+function authorize() {
+  DriveApp.getRootFolder();
+  SpreadsheetApp.flush();
+  Logger.log('Order Intake has access to Drive and Sheets. Now deploy it as a web app.');
+}
+
 const WIDTH = 12;   // columns A–L
 const ID_COL = 13;  // column M: the app's id for each shop block (light grey)
 const MENU_TAB = 'Menu';
@@ -1267,7 +1277,10 @@ async function sheetPost(payload) {
   let data;
   try { data = await res.json(); }
   catch { throw new Error('Google sent back a sign-in page. In the Apps Script deployment, set "Who has access" to Anyone.'); }
-  if (!data.ok) throw new Error(data.error || 'the sheet refused the request.');
+  if (!data.ok) {
+    if (/permission|authori[sz]/i.test(data.error || '')) throw new Error('Google hasn\'t given the script access to your Drive and Sheets yet. In the Apps Script editor, click Run (with authorize selected), tick Select all when Google asks, then tap Connect again.');
+    throw new Error(data.error || 'the sheet refused the request.');
+  }
   return data;
 }
 
