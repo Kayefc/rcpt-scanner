@@ -7,142 +7,176 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Orders">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#3b2a20">
+<meta name="theme-color" content="#000000">
 <link rel="manifest" href="manifest.json">
 <title>Order Intake</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+  /* Layout: a single column of station-sign panels: white body, black top band, bold sans type. */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #faf7f3;
+    color-scheme: light;
+    --bg: #ffffff;
     --card: #ffffff;
-    --ink: #2a211c;
-    --muted: #7a6d64;
-    --line: #e6ddd4;
-    --accent: #3b2a20;
+    --ink: #000000;
+    --muted: #6b6b6b;
+    --line: #e3e3e3;
+    --field: #f4f4f4;
+    --accent: #000000;
     --accent-ink: #ffffff;
-    --good: #2e7d4f;
-    --good-bg: #e5f4ea;
-    --warn: #9a6400;
-    --warn-bg: #fff2d6;
-    --bad: #b3261e;
-    --bad-bg: #fde4e2;
-    /* category colours, matched to the order sheet */
+    --good: #00733a;
+    --good-bg: #dff3e6;
+    --warn: #8a5a00;
+    --warn-bg: #fff0c7;
+    --bad: #c4161c;
+    --bad-bg: #fde3e3;
+    /* category colours, matched to the order sheet (pastels) and as bold bullets */
     --c-round: #ffffff;
     --c-loaf: #fff2cc;
     --c-cupcake: #b6d7a8;
     --c-brownie: #f9cb9c;
     --c-blondie: #ead1dc;
     --c-cookie: #cfe2f3;
-    /* spreadsheet preview mimics Google Sheets, so it stays light in both themes */
+    --b-loaf: #f7c600;
+    --b-cupcake: #2f9a4f;
+    --b-brownie: #f26d21;
+    --b-blondie: #ef9cc0;
+    --b-cookie: #2f7fd1;
+    /* spreadsheet preview mimics Google Sheets */
     --sh-bg: #ffffff; --sh-ink: #222222; --sh-grid: #d9d9d9; --sh-head: #f3f3f3; --sh-head-ink: #666666;
     --sh-num: #6fa8dc; --sh-shopnum: #ffd966; --sh-shopred: #ff0000; --sh-shop: #cccccc; --sh-dark: #434343;
-    --overlay: rgba(30, 20, 15, .45);
+    --overlay: rgba(0, 0, 0, .45);
     --radius: 10px;
-    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #1c1714; --card: #26201c; --ink: #f1e9e2; --muted: #a89a8f; --line: #3d342e;
-      --accent: #f0c9a4; --accent-ink: #2a1d14;
-      --good: #7fd19c; --good-bg: #1f3a29; --warn: #f2c46b; --warn-bg: #3d3018; --bad: #ff9a90; --bad-bg: #452321;
-      --overlay: rgba(0, 0, 0, .6); color-scheme: dark;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #1c1714; --card: #26201c; --ink: #f1e9e2; --muted: #a89a8f; --line: #3d342e;
-    --accent: #f0c9a4; --accent-ink: #2a1d14;
-    --good: #7fd19c; --good-bg: #1f3a29; --warn: #f2c46b; --warn-bg: #3d3018; --bad: #ff9a90; --bad-bg: #452321;
-    --overlay: rgba(0, 0, 0, .6); color-scheme: dark;
+    --sans: "Helvetica Neue", Helvetica, "Inter Tight", Arial, sans-serif;
   }
 
   html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; -webkit-font-smoothing: antialiased; }
   button, input, select, textarea { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
 
-  .app { max-width: 960px; margin: 0 auto; padding: 0 16px 80px; }
+  .app { max-width: 920px; margin: 0 auto; padding: 16px 16px 96px; }
+
+  /* station sign masthead */
+  .sign { background: #000; color: #fff; border-radius: var(--radius); padding: 18px 20px 16px; display: grid; gap: 12px; }
+  .sign h1 { font-size: clamp(28px, 6vw, 40px); font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+  .sign .meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .sign .meta span.date { margin-left: auto; font-weight: 500; font-size: 14px; color: #bdbdbd; }
+
+  /* category bullets: two-letter product-code prefixes in the sheet's colours */
+  .bul {
+    width: 30px; height: 30px; border-radius: 50%; display: inline-grid; place-items: center; flex-shrink: 0;
+    font-weight: 700; font-size: 11px; letter-spacing: -0.02em; background: #fff; color: #000; box-shadow: inset 0 0 0 2px #000;
+  }
+  .bul.round   { background: #fff; color: #000; }
+  .bul.loaf    { background: var(--b-loaf); color: #000; box-shadow: none; }
+  .bul.cupcake { background: var(--b-cupcake); color: #fff; box-shadow: none; }
+  .bul.brownie { background: var(--b-brownie); color: #fff; box-shadow: none; }
+  .bul.blondie { background: var(--b-blondie); color: #000; box-shadow: none; }
+  .bul.cookie  { background: var(--b-cookie); color: #fff; box-shadow: none; }
+  .bul.none    { background: var(--bad); color: #fff; box-shadow: none; font-size: 15px; }
+  .sign .bul { box-shadow: none; }
+  .sign .bul.round { background: #fff; }
 
   header {
-    position: sticky; top: 0; z-index: 10;
-    background: var(--bg);
-    padding: 14px 0 0;
-    border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 10; background: var(--bg);
+    border-bottom: 2px solid #000; margin-top: 8px;
   }
-  .title { font-weight: 700; font-size: 18px; letter-spacing: .01em; }
-  .title small { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: 6px; }
-  nav { display: flex; gap: 4px; margin-top: 10px; overflow-x: auto; }
+  nav { display: flex; gap: 2px; overflow-x: auto; }
   nav button {
-    background: none; border: 0; padding: 10px 12px; cursor: pointer;
-    border-bottom: 2px solid transparent; color: var(--muted); white-space: nowrap; font-weight: 500;
+    background: none; border: 0; padding: 14px 12px 11px; cursor: pointer; white-space: nowrap;
+    font-weight: 700; font-size: 15px; color: var(--muted); border-bottom: 4px solid transparent;
+    display: inline-flex; align-items: center; gap: 8px;
   }
-  nav button.active { color: var(--ink); border-bottom-color: var(--accent); }
-  .pill { display: inline-block; min-width: 20px; padding: 1px 7px; border-radius: 20px; background: var(--accent); color: var(--accent-ink); font-size: 12px; text-align: center; }
+  nav button:first-child { padding-left: 2px; }
+  nav button.active { color: #000; border-bottom-color: #000; }
+  .pill { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: #000; color: #fff; font-size: 12px; font-weight: 700; }
 
   section.tab { display: none; padding-top: 18px; }
   section.tab.active { display: block; }
 
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
-  label.lbl { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
-  input[type=text], input[type=number], select, textarea {
-    width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--card);
-    padding: 10px 12px; outline: none;
+  /* panels: white sign with a black top band */
+  .card {
+    background: var(--card); border-radius: var(--radius); padding: 18px;
+    border-top: 10px solid #000; box-shadow: inset 0 0 0 1px var(--line); margin-bottom: 14px;
   }
-  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
-  textarea { min-height: 160px; resize: vertical; line-height: 1.4; }
+  label.lbl { display: block; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; color: #000; margin-bottom: 10px; }
+  .field label.lbl, .row .field label.lbl { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%; border: 2px solid transparent; border-radius: 8px; background: var(--field);
+    padding: 11px 12px; outline: none; font-weight: 500;
+  }
+  input:focus, select:focus, textarea:focus { border-color: #000; background: #fff; }
+  textarea { min-height: 170px; resize: vertical; line-height: 1.45; font-weight: 400; }
+  #shop { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
 
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .grow { flex: 1; min-width: 0; }
-  .hint { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 8px; line-height: 1.45; }
 
   .btn {
-    border: 1px solid var(--line); background: var(--card); border-radius: 8px;
-    padding: 10px 14px; cursor: pointer; font-weight: 500;
+    border: 2px solid #000; background: #fff; color: #000; border-radius: 8px;
+    padding: 10px 16px; cursor: pointer; font-weight: 700;
   }
-  .btn:hover { border-color: var(--accent); }
-  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-  .btn.danger { color: var(--bad); }
-  .btn.small { padding: 6px 10px; font-size: 13px; }
-  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn:hover { background: var(--field); }
+  .btn.primary { background: #000; color: #fff; }
+  .btn.primary:hover { background: #262626; }
+  .btn.danger { border-color: var(--bad); color: var(--bad); }
+  .btn.small { padding: 6px 11px; font-size: 13px; border-width: 1.5px; }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+  .btn:focus-visible, nav button:focus-visible, .x:focus-visible { outline: 3px solid #000; outline-offset: 2px; }
 
-  .tag { font-size: 12px; padding: 2px 8px; border-radius: 20px; white-space: nowrap; font-weight: 500; }
+  .tag { font-size: 12px; padding: 3px 9px; border-radius: 20px; white-space: nowrap; font-weight: 700; }
   .tag.good { background: var(--good-bg); color: var(--good); }
   .tag.warn { background: var(--warn-bg); color: var(--warn); }
   .tag.bad { background: var(--bad-bg); color: var(--bad); }
 
+  /* line count: the at-a-glance check against the original message */
+  .stats { display: flex; gap: 22px; align-items: flex-end; margin: 4px 0 14px; padding-bottom: 14px; border-bottom: 2px solid #000; }
+  .stat b { display: block; font-size: 44px; line-height: .95; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .stats .cats { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+  .stats .cats .bul { width: 26px; height: 26px; font-size: 10px; }
+  .stats .cats > span { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 14px; margin-left: 6px; font-variant-numeric: tabular-nums; }
+  @media (max-width: 480px) { nav button { padding-left: 8px; padding-right: 8px; font-size: 14px; } nav .long { display: none; } }
+  @media (min-width: 481px) { nav .short { display: none; } }
+
   /* parsed items */
-  .items { display: flex; flex-direction: column; gap: 8px; }
+  .items { display: flex; flex-direction: column; }
   .item {
-    display: grid; grid-template-columns: 70px 1fr auto 36px; gap: 8px; align-items: center;
-    border: 1px solid var(--line); border-left-width: 6px; border-radius: 8px; padding: 8px; background: var(--card);
+    display: grid; grid-template-columns: 30px 1fr 74px 92px 32px; gap: 10px; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid var(--line);
   }
-  .item .src { grid-column: 1 / -1; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
-  .item .src b { font-weight: 500; color: var(--ink); }
-  .item input[type=number] { text-align: center; padding: 8px 4px; }
-  .item select { padding: 8px; }
-  .x { border: 0; background: none; font-size: 20px; color: var(--muted); cursor: pointer; height: 36px; }
-  .x:hover { color: var(--bad); }
-  @media (max-width: 560px) {
-    .item { grid-template-columns: 64px 1fr 36px; }
-    .item .tag { grid-column: 1 / -1; justify-self: start; order: 5; }
+  .item > .tag { justify-self: start; }
+  .item .src { grid-column: 2 / -1; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; margin-top: -4px; }
+  .item .src b { font-weight: 600; color: #000; }
+  .item input[type=number] { text-align: center; padding: 9px 4px; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .item select { padding: 10px 8px; font-weight: 700; }
+  .x { border: 0; background: none; font-size: 22px; color: var(--muted); cursor: pointer; height: 32px; border-radius: 6px; }
+  .x:hover { color: var(--bad); background: var(--bad-bg); }
+  @media (max-width: 600px) {
+    .item { grid-template-columns: 30px 1fr 64px 28px; }
+    .item select { grid-column: 2 / -1; order: 1; }
+    .item .bul { order: 0; }
+    .item input[type=number] { grid-column: 3; order: 3; }
+    .item .tag { grid-column: 2; order: 2; justify-self: start; }
+    .item .x { order: 4; }
+    .item .src { order: 5; }
+    .stat b { font-size: 38px; }
   }
 
-  .cat-round   { border-left-color: #c9bfb6; }
-  .cat-loaf    { border-left-color: #e6c25a; }
-  .cat-cupcake { border-left-color: #7fb26a; }
-  .cat-brownie { border-left-color: #c9864a; }
-  .cat-blondie { border-left-color: #d496b0; }
-  .cat-cookie  { border-left-color: #7da7d6; }
-  .cat-none    { border-left-color: var(--bad); }
-
-  details.ignored { margin-top: 12px; }
-  details.ignored summary { cursor: pointer; color: var(--muted); font-size: 13px; }
-  .ign { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  details.ignored { margin-top: 14px; }
+  details.ignored summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; }
+  .ign { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
   .ign span { flex: 1; color: var(--muted); overflow-wrap: anywhere; }
 
-  .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; margin-top: 14px; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; margin-top: 16px; }
 
   /* compiled sheet preview */
   .sheet-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--sh-bg); max-height: 65vh; }
-  table.sheet { border-collapse: collapse; font-size: 12px; color: var(--sh-ink); }
+  table.sheet { border-collapse: collapse; font-size: 12px; color: var(--sh-ink); font-family: Arial, sans-serif; }
   table.sheet th, table.sheet td { border: 1px solid var(--sh-grid); padding: 3px 6px; white-space: nowrap; height: 22px; }
   table.sheet th { background: var(--sh-head); font-weight: 500; color: var(--sh-head-ink); position: sticky; top: 0; z-index: 1; }
   table.sheet td.rn { background: var(--sh-head); color: var(--sh-head-ink); text-align: right; }
@@ -159,49 +193,58 @@
   table.sheet td.C, table.sheet td.E, table.sheet td.G, table.sheet td.I, table.sheet td.K { text-align: center; }
   table.sheet td.B, table.sheet td.D, table.sheet td.F, table.sheet td.H, table.sheet td.J { font-weight: 600; min-width: 150px; }
 
-  .orders-list { display: flex; flex-direction: column; gap: 6px; }
-  .order-row { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
-  .order-row .n { width: 26px; height: 26px; border-radius: 50%; background: var(--sh-shopnum); color: var(--sh-ink); display: grid; place-items: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
-  .order-row .nm { flex: 1; min-width: 0; }
-  .order-row .nm small { display: block; color: var(--muted); }
+  .orders-list { display: flex; flex-direction: column; }
+  .order-row { display: flex; gap: 10px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .order-row .n { width: 32px; height: 32px; border-radius: 50%; background: #000; color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 15px; flex-shrink: 0; }
+  .order-row .nm { flex: 1; min-width: 140px; font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
+  .order-row .nm small { display: block; color: var(--muted); font-weight: 500; font-size: 13px; letter-spacing: 0; }
 
-  table.totals { width: 100%; border-collapse: collapse; }
-  table.totals td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
-  table.totals td:last-child { text-align: right; font-weight: 600; width: 60px; }
-  table.totals tr.head td { font-weight: 700; padding-top: 14px; border-bottom: 2px solid var(--line); }
+  table.totals { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  table.totals td { padding: 7px 0; border-bottom: 1px solid var(--line); }
+  table.totals td:last-child { text-align: right; font-weight: 700; width: 60px; }
+  table.totals tr.head td { font-weight: 700; font-size: 17px; padding: 0 0 10px; border-bottom: 2px solid #000; }
+  table.totals tr.head td:first-child { display: flex; align-items: center; gap: 10px; }
   .totals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
 
   .empty { text-align: center; color: var(--muted); padding: 30px 10px; }
 
   .toast {
-    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(100px);
-    background: var(--accent); color: var(--accent-ink); padding: 10px 18px; border-radius: 30px;
+    position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%) translateY(120px);
+    background: #000; color: #fff; padding: 12px 20px; border-radius: 10px; font-weight: 600;
     transition: transform .2s; z-index: 50; max-width: calc(100% - 32px); text-align: center;
   }
   .toast.show { transform: translateX(-50%) translateY(0); }
+  @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
 
   .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
   .settings-grid textarea { min-height: 220px; font-size: 13px; }
-  [hidden] { display: none !important; }
+  .settings-grid label.lbl { font-size: 15px; display: flex; align-items: center; gap: 8px; }
   .modal { position: fixed; inset: 0; background: var(--overlay); display: grid; place-items: center; padding: 16px; z-index: 60; }
-  .modal-box { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; max-width: 380px; width: 100%; }
-  .modal-box p { line-height: 1.45; }
-  .btn:focus-visible, nav button:focus-visible, .x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  ol.steps { padding-left: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.45; margin-bottom: 14px; }
+  .modal-box { background: #fff; border-top: 10px solid #000; border-radius: var(--radius); padding: 20px; max-width: 400px; width: 100%; }
+  .modal-box p { line-height: 1.45; font-weight: 600; font-size: 16px; }
+  ol.steps { list-style: none; counter-reset: step; display: flex; flex-direction: column; gap: 12px; line-height: 1.45; margin-bottom: 14px; }
+  ol.steps li { counter-increment: step; display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; }
+  ol.steps li::before { content: counter(step); width: 30px; height: 30px; border-radius: 50%; background: #000; color: #fff; display: grid; place-items: center; font-weight: 700; }
   .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
-  .check { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
-  .check input { width: 18px; height: 18px; }
-  .editing-banner { background: var(--warn-bg); color: var(--warn); padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; display: none; }
+  .check { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; font-weight: 600; }
+  .check input { width: 20px; height: 20px; accent-color: #000; }
+  .editing-banner { background: var(--warn-bg); color: var(--warn); padding: 12px 14px; border-radius: 8px; margin-bottom: 14px; display: none; font-weight: 600; }
   .editing-banner.show { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
 </style>
 </head>
 <body>
 <div class="app">
+  <div class="sign">
+    <h1>Order Intake</h1>
+    <div class="meta">
+      <span class="bul round" title="Round Cakes">RC</span><span class="bul loaf" title="Loaf Cakes">LC</span><span class="bul cupcake" title="Cupcakes">CC</span><span class="bul brownie" title="Brownies">BR</span><span class="bul blondie" title="Blondies/Bars">BA</span><span class="bul cookie" title="Cookies/Biscuits">CO</span>
+      <span class="date" id="today"></span>
+    </div>
+  </div>
   <header>
-    <div class="title">Order Intake <small>wholesale orders → sheet</small></div>
     <nav>
       <button data-tab="new" class="active">New order</button>
-      <button data-tab="sheet">Compiled sheet <span class="pill" id="orderCount">0</span></button>
+      <button data-tab="sheet"><span class="long">Compiled sheet</span><span class="short">Sheet</span> <span class="pill" id="orderCount">0</span></button>
       <button data-tab="totals">Totals</button>
       <button data-tab="settings">Settings</button>
     </nav>
@@ -248,6 +291,11 @@
         <label class="lbl grow" style="margin:0">Items</label>
         <button class="btn small" id="addItem">+ Add item</button>
       </div>
+      <div class="stats" id="stats" hidden>
+        <div class="stat"><b id="lineCount">0</b><span>Lines</span></div>
+        <div class="stat"><b id="unitCount">0</b><span>Items</span></div>
+        <div class="cats" id="catCount"></div>
+      </div>
       <div class="items" id="items"></div>
       <div class="empty" id="itemsEmpty">Paste an order above and tap <b>Read order</b>.</div>
       <details class="ignored" id="ignoredBox" hidden>
@@ -266,7 +314,7 @@
     <div class="card">
       <div class="row">
         <div class="grow">
-          <b>Ready to send</b>
+          <label class="lbl" style="margin:0 0 4px">Ready to send</label>
           <div class="hint" id="sendHint"></div>
         </div>
       </div>
@@ -901,19 +949,33 @@ function confTag(it) {
   return `<span class="tag bad">Unsure</span>`;
 }
 
+// category bullet, using the product-code prefixes from the master database
+const BUL = { round: 'RC', loaf: 'LC', cupcake: 'CC', brownie: 'BR', blondie: 'BA', cookie: 'CO' };
+const bullet = cat => cat ? `<span class="bul ${cat}" title="${esc((CATS.find(c => c.key === cat) || {}).label || '')}">${BUL[cat]}</span>` : '<span class="bul none" title="Not matched">?</span>';
+function renderStats() {
+  const n = draft.items.length;
+  $('#stats').hidden = !n;
+  $('#lineCount').textContent = n;
+  $('#unitCount').textContent = draft.items.reduce((a, it) => a + (+it.qty || 0), 0);
+  const per = {};
+  draft.items.forEach(it => { const p = findProduct(it.name); if (p) per[p.cat] = (per[p.cat] || 0) + 1; });
+  $('#catCount').innerHTML = CATS.filter(c => per[c.key]).map(c => `<span title="${per[c.key]} ${esc(c.label)}">${bullet(c.key)}${per[c.key]}</span>`).join('');
+}
 function renderItems() {
   const box = $('#items');
   box.innerHTML = draft.items.map((it, i) => {
     const p = findProduct(it.name);
-    return `<div class="item cat-${p ? p.cat : 'none'}" data-i="${i}">
-      <input type="number" min="0" inputmode="numeric" value="${it.qty ?? ''}" data-f="qty" aria-label="Quantity">
+    return `<div class="item" data-i="${i}">
+      ${bullet(p && p.cat)}
       <select data-f="name" aria-label="Product">${productOptions(it.name)}</select>
+      <input type="number" min="0" inputmode="numeric" value="${it.qty ?? ''}" data-f="qty" aria-label="Quantity">
       ${confTag(it)}
       <button class="x" data-f="del" title="Remove">×</button>
       ${it.src ? `<div class="src">From: <b>${esc(it.src)}</b>${it.qtyGuessed ? ' (no quantity found, set to 1)' : ''}${it.alt && it.name === it.auto ? ` · could also be <b>${esc(it.alt)}</b>` : ''}</div>` : ''}
     </div>`;
   }).join('');
   $('#itemsEmpty').style.display = draft.items.length ? 'none' : '';
+  renderStats();
   const ig = $('#ignoredBox');
   ig.hidden = !draft.ignored.length;
   $('#ignoredCount').textContent = draft.ignored.length;
@@ -960,7 +1022,7 @@ $('#shopSuggest').addEventListener('click', e => {
 $('#items').addEventListener('input', e => {
   const row = e.target.closest('.item'); if (!row) return;
   const it = draft.items[+row.dataset.i];
-  if (e.target.dataset.f === 'qty') { it.qty = e.target.value === '' ? null : +e.target.value; it.qtyGuessed = false; saveDraft(); }
+  if (e.target.dataset.f === 'qty') { it.qty = e.target.value === '' ? null : +e.target.value; it.qtyGuessed = false; saveDraft(); renderStats(); }
 });
 $('#items').addEventListener('change', e => {
   const row = e.target.closest('.item'); if (!row) return;
@@ -1339,7 +1401,7 @@ function renderTotals() {
     let sub = 0;
     const rows = [...list, ...extra].map(n => { const v = sums[n] || 0; sub += v; return `<tr><td>${esc(n)}</td><td>${v || ''}</td></tr>`; }).join('');
     grand += sub;
-    return `<div class="card"><table class="totals"><tr class="head"><td>${esc(c.label)}</td><td>${sub}</td></tr>${rows}</table></div>`;
+    return `<div class="card"><table class="totals"><tr class="head"><td>${bullet(c.key)}${esc(c.label)}</td><td>${sub}</td></tr>${rows}</table></div>`;
   }).join('');
   $('#grandTotal').textContent = `Total ${grand}`;
 }
@@ -1355,7 +1417,7 @@ function renderSettings() {
     $('#menuRemote').textContent = `From the Menu tab of ${remote.fileName}. Change the menu there, then tap Refresh on the New order screen.`;
     $('#shopsRemote').textContent = `${remote.shops.length} shops from the master database. Add new shops there, then tap Refresh.`;
   }
-  $('#catalogEditors').innerHTML = CATS.map(c => `<div><label class="lbl" for="cat-${c.key}">${esc(c.label)}</label><textarea id="cat-${c.key}">${esc((catalog[c.key] || []).join('\n'))}</textarea></div>`).join('');
+  $('#catalogEditors').innerHTML = CATS.map(c => `<div><label class="lbl" for="cat-${c.key}">${bullet(c.key)}${esc(c.label)}</label><textarea id="cat-${c.key}">${esc((catalog[c.key] || []).join('\n'))}</textarea></div>`).join('');
   $('#shopsEdit').value = shops.join('\n');
   const n = Object.keys(learned).length + Object.keys(learnedShops).length;
   $('#learnedInfo').textContent = n ? `${n} remembered match${n === 1 ? '' : 'es'}. Each time you approve an order, the app remembers how each line was matched, so the same wording is recognised next time.` : 'Nothing learned yet. The app remembers your corrections each time you approve an order.';
@@ -1386,6 +1448,7 @@ function showTab(name) {
 }
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
+$('#today').textContent = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 applyConnectLink();
 if (sheetConnected() && remote) { catalog = Object.fromEntries(CATS.map(c => [c.key, (remote.menu && remote.menu[c.key]) || []])); shops = remote.shops || []; }
 buildIndex();
