@@ -36,7 +36,7 @@
     --c-cookie: #cfe2f3;
     /* spreadsheet preview mimics Google Sheets, so it stays light in both themes */
     --sh-bg: #ffffff; --sh-ink: #222222; --sh-grid: #d9d9d9; --sh-head: #f3f3f3; --sh-head-ink: #666666;
-    --sh-num: #6fa8dc; --sh-shopnum: #ffd966; --sh-shop: #cccccc; --sh-dark: #434343;
+    --sh-num: #6fa8dc; --sh-shopnum: #ffd966; --sh-shopred: #ff0000; --sh-shop: #cccccc; --sh-dark: #434343;
     --overlay: rgba(30, 20, 15, .45);
     --radius: 10px;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -147,15 +147,15 @@
   table.sheet th { background: var(--sh-head); font-weight: 500; color: var(--sh-head-ink); position: sticky; top: 0; z-index: 1; }
   table.sheet td.rn { background: var(--sh-head); color: var(--sh-head-ink); text-align: right; }
   table.sheet td.A { background: var(--sh-num); text-align: center; font-weight: 700; }
-  table.sheet tr.r-shop td.A { background: var(--sh-shopnum); }
+  table.sheet tr.r-shop td.A { background: var(--sh-shopred); color: #fff; }
   table.sheet tr.r-shop td.B { font-weight: 700; background: var(--sh-shop); }
   table.sheet tr.r-shop td.data { background: var(--sh-dark); }
-  table.sheet td.B, table.sheet td.C { background: var(--c-round); }
-  table.sheet td.D, table.sheet td.E { background: var(--c-loaf); }
-  table.sheet td.F, table.sheet td.G { background: var(--c-cupcake); }
-  table.sheet td.H.brownie, table.sheet td.I.brownie { background: var(--c-brownie); }
-  table.sheet td.H.blondie, table.sheet td.I.blondie { background: var(--c-blondie); }
-  table.sheet td.J, table.sheet td.K { background: var(--c-cookie); }
+  table.sheet td.B, table.sheet td.C, table.sheet td.E, table.sheet td.G, table.sheet td.I, table.sheet td.K { background: var(--c-round); }
+  table.sheet td.D { background: var(--c-loaf); }
+  table.sheet td.F { background: var(--c-cupcake); }
+  table.sheet td.H.brownie { background: var(--c-brownie); }
+  table.sheet td.H.blondie { background: var(--c-blondie); }
+  table.sheet td.J { background: var(--c-cookie); }
   table.sheet td.C, table.sheet td.E, table.sheet td.G, table.sheet td.I, table.sheet td.K { text-align: center; }
   table.sheet td.B, table.sheet td.D, table.sheet td.F, table.sheet td.H, table.sheet td.J { font-weight: 600; min-width: 150px; }
 
@@ -214,6 +214,15 @@
       <button class="btn small" id="cancelEdit">Cancel edit</button>
     </div>
 
+    <div class="card" id="fileCard" hidden>
+      <label class="lbl" for="fileSel">Delivery sheet</label>
+      <div class="row">
+        <select id="fileSel" class="grow"></select>
+        <button class="btn" id="refreshCfg">Refresh</button>
+      </div>
+      <div class="hint" id="fileInfo"></div>
+    </div>
+
     <div class="card">
       <label class="lbl" for="paste">Paste the order (email or WhatsApp)</label>
       <textarea id="paste" placeholder="e.g.&#10;Hi! Order for Friday please:&#10;2 x carrot cake&#10;red velvet x2&#10;3 banana loaf&#10;12 white choc raspberry cookies&#10;Thanks, Kahaila"></textarea>
@@ -231,6 +240,7 @@
         <span id="shopTag"></span>
       </div>
       <datalist id="shopList"></datalist>
+      <div class="row" id="shopSuggest" style="margin-top:8px" hidden></div>
     </div>
 
     <div class="card">
@@ -288,52 +298,70 @@
 
   <!-- SETTINGS -->
   <section class="tab" id="tab-settings">
-    <div class="card">
-      <label class="lbl" for="spacer">Blank rows between shops</label>
-      <input type="number" id="spacer" min="0" max="20" style="max-width:120px">
-      <div class="hint">Added after each shop's block when copying.</div>
-    </div>
     <div class="card" id="gsCard">
       <div class="row" style="margin-bottom:10px">
-        <label class="lbl grow" style="margin:0">Google Sheet</label>
+        <label class="lbl grow" style="margin:0">Google Sheets</label>
         <span id="gsTag"></span>
       </div>
       <div id="gsSetup">
         <ol class="steps">
-          <li>Open the Google Sheet you want orders sent to. Your main sheet is fine: orders go into their own tab.</li>
-          <li>Go to <b>Extensions → Apps Script</b>, delete what's in the editor, paste the script, and click Save. <button class="btn small" id="copyScript">Copy script</button></li>
-          <li>Click <b>Deploy → New deployment</b>. Choose type <b>Web app</b>, set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>, then click <b>Deploy</b> and allow access when Google asks.</li>
-          <li>Copy the <b>Web app URL</b> and paste it below, then click <b>Test connection</b>.</li>
+          <li>Go to <b>script.google.com</b> and click <b>New project</b>. Delete what's in the editor, paste the script, and click Save. <button class="btn small" id="copyScript">Copy script</button></li>
+          <li>Click <b>Deploy → New deployment</b>. Choose type <b>Web app</b>, set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>, then click <b>Deploy</b>. Allow access when Google asks: the script needs your Drive to find each day's order sheet.</li>
+          <li>Paste the <b>Web app URL</b> below, add the link to your master database, and click <b>Connect</b>.</li>
         </ol>
-        <div class="hint" style="margin:-4px 0 14px">"Anyone" lets the app reach the script without a Google sign-in. The script only accepts orders that carry this app's private key, which is built into the script you copy.</div>
+        <div class="hint" style="margin:-4px 0 14px">This is set up once. Each new delivery sheet you copy is found automatically. "Anyone" lets the app reach the script without a Google sign-in; the script only accepts requests carrying this app's private key, which is built into the script you copy.</div>
       </div>
       <div class="field">
         <label class="lbl" for="gsUrl" style="margin:0">Web app URL</label>
         <input type="text" id="gsUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" spellcheck="false">
       </div>
       <div class="field">
-        <label class="lbl" for="gsTab" style="margin:0">Tab name</label>
-        <input type="text" id="gsTab" placeholder="Order Intake">
+        <label class="lbl" for="gsMaster" style="margin:0">Master database link</label>
+        <input type="text" id="gsMaster" placeholder="https://docs.google.com/spreadsheets/d/…" autocomplete="off" spellcheck="false">
+        <div class="hint" style="margin:0">Shop names come from its shop list tab.</div>
+      </div>
+      <div class="row" style="align-items:flex-start">
+        <div class="field grow">
+          <label class="lbl" for="gsFilter" style="margin:0">Order sheets have this in their name</label>
+          <input type="text" id="gsFilter" placeholder="MENU">
+        </div>
+        <div class="field grow">
+          <label class="lbl" for="gsTab" style="margin:0">Tab orders go into</label>
+          <input type="text" id="gsTab" placeholder="Incoming Orders">
+        </div>
       </div>
       <label class="check"><input type="checkbox" id="gsAuto"> Send each order automatically when I approve it</label>
       <div class="actions">
         <button class="btn" id="gsLink" hidden>Copy link for another device</button>
         <button class="btn danger" id="gsDisconnect" hidden>Disconnect</button>
-        <button class="btn primary" id="gsTest">Test connection</button>
+        <button class="btn primary" id="gsTest">Connect</button>
       </div>
     </div>
     <div class="card">
-      <label class="lbl">Menu (one product per line, spelled exactly as in your sheet)</label>
+      <label class="lbl" for="spare">Spare rows under each shop</label>
+      <input type="number" id="spare" min="0" max="10" style="max-width:120px">
+      <div class="hint">Empty rows with dropdowns, for adding items in the sheet later.</div>
+    </div>
+    <div class="card">
+      <label class="lbl">Menu</label>
+      <div class="hint" id="menuRemote" hidden></div>
+      <div id="menuLocal">
+      <div class="hint" style="margin:0 0 10px">One product per line, spelled exactly as in your sheet. Once Google Sheets is connected, the menu comes from the delivery sheet's Menu tab instead.</div>
       <div class="settings-grid" id="catalogEditors"></div>
       <div class="actions">
         <button class="btn danger" id="resetMenu">Reset menu to default</button>
         <button class="btn primary" id="saveMenu">Save menu</button>
       </div>
+      </div>
     </div>
     <div class="card">
-      <label class="lbl" for="shopsEdit">Shops (one per line)</label>
-      <textarea id="shopsEdit"></textarea>
-      <div class="actions"><button class="btn primary" id="saveShops">Save shops</button></div>
+      <label class="lbl" for="shopsEdit">Shops</label>
+      <div class="hint" id="shopsRemote" hidden></div>
+      <div id="shopsLocal">
+        <div class="hint" style="margin:0 0 10px">One per line. Once Google Sheets is connected, shops come from the master database instead.</div>
+        <textarea id="shopsEdit"></textarea>
+        <div class="actions"><button class="btn primary" id="saveShops">Save shops</button></div>
+      </div>
     </div>
     <div class="card">
       <label class="lbl">Learned matches</label>
@@ -354,35 +382,47 @@
 </div>
 
 <script type="text/plain" id="gasSource">
-// Order Intake → Google Sheet
-// Paste this into Extensions → Apps Script of the spreadsheet orders should go to,
-// then Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone).
+// Order Intake → Google Sheets
+// A standalone script (script.google.com → New project). It finds each delivery day's
+// order file in your Drive, reads its Menu tab and the master database's shop list,
+// and adds approved orders to an "Incoming Orders" tab in that file, formatted like
+// Shop Orders with working dropdowns. It never changes any other tab.
 const KEY = '__KEY__';
-const WIDTH = 11;  // columns A–K hold the order
-const ID_COL = 13; // column M holds each shop block's id so resent orders replace their old block
+const WIDTH = 12;   // columns A–L
+const ID_COL = 13;  // column M: the app's id for each shop block (light grey)
+const MENU_TAB = 'Menu';
+const ORDERS_TAB = 'Shop Orders';
+const COLOURS = {
+  shopNum: '#ff0000', shopName: '#cccccc', shopBar: '#434343', num: '#6fa8dc', white: '#ffffff',
+  loaf: '#fff2cc', cupcake: '#b6d7a8', brownie: '#f9cb9c', blondie: '#ead1dc', cookie: '#cfe2f3'
+};
+const HEADERS = [
+  [/^round( layer)? cakes?$/i, 'round'], [/^loaf cakes?$/i, 'loaf'], [/^cup ?cakes?$/i, 'cupcake'],
+  [/^brownies?$/i, 'brownie'], [/^(blondies?( ?\/ ?bars?)?|bars)$/i, 'blondie'], [/^(cookies?( ?\/ ?biscuits?)?|biscuits)$/i, 'cookie']
+];
 
 function doPost(e) {
   const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  lock.waitLock(30000);
   try {
     const req = JSON.parse(e.postData.contents);
     if (req.key !== KEY) return reply({ ok: false, error: 'This script belongs to a different copy of the app. Copy the script from the app again.' });
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const tab = req.tab || 'Order Intake';
-    const sh = ss.getSheetByName(tab) || ss.insertSheet(tab);
-    const spacer = Math.max(0, Number(req.spacer) || 0);
-    if (req.action === 'ping') return reply({ ok: true, spreadsheet: ss.getName(), tab: sh.getName() });
+    if (req.action === 'config') return reply(config(req));
+    const ss = SpreadsheetApp.openById(req.fileId);
+    const sh = incomingTab(ss, req.tab || 'Incoming Orders');
     if (req.action === 'delete') {
       (req.ids || []).forEach(function (id) { removeBlock(sh, id); });
       renumber(sh);
       return reply({ ok: true });
     }
+    const menu = readMenu(ss);
+    const shops = readShops(req.master);
     const sent = [];
-    (req.orders || []).forEach(function (o) { upsert(sh, o, spacer); sent.push(o.id); });
+    (req.orders || []).forEach(function (o) { upsert(sh, o, menu, shops); sent.push(o.id); });
     renumber(sh);
-    return reply({ ok: true, sent: sent });
+    return reply({ ok: true, sent: sent, file: ss.getName() });
   } catch (err) {
-    return reply({ ok: false, error: String(err) });
+    return reply({ ok: false, error: String(err && err.message || err) });
   } finally {
     lock.releaseLock();
   }
@@ -396,10 +436,103 @@ function reply(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
+// Delivery files, the chosen file's menu and shops already on it, and the master shop list.
+function config(req) {
+  const filter = String(req.nameFilter || 'MENU').replace(/['\\]/g, '');
+  const it = DriveApp.searchFiles("title contains '" + filter + "' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false");
+  const files = [];
+  while (it.hasNext() && files.length < 300) {
+    const f = it.next();
+    files.push({ id: f.getId(), name: f.getName(), created: f.getDateCreated().getTime() });
+  }
+  files.sort(function (a, b) { return b.created - a.created; });
+  const top = files.slice(0, 15);
+  if (!top.length) throw new Error('No Google Sheets with "' + filter + '" in their name were found in your Drive.');
+  const fileId = top.some(function (f) { return f.id === req.fileId; }) ? req.fileId : top[0].id;
+  const ss = SpreadsheetApp.openById(fileId);
+  const menu = readMenu(ss);
+  const products = {};
+  Object.keys(menu).forEach(function (k) { products[k] = menu[k].names; });
+  return { ok: true, files: top, fileId: fileId, fileName: ss.getName(), menu: products, shops: readShops(req.master), existing: existingShops(ss) };
+}
+
+// Menu tab: section headings (Round Cakes, Loaf Cakes, ...) in columns A, D and G, products under them, TOTAL ends a section.
+function readMenu(ss) {
+  const sh = ss.getSheetByName(MENU_TAB);
+  if (!sh) throw new Error('"' + ss.getName() + '" has no ' + MENU_TAB + ' tab.');
+  const values = sh.getDataRange().getDisplayValues();
+  const menu = {};
+  [0, 3, 6].forEach(function (col) {
+    let cat = null;
+    values.forEach(function (row, r) {
+      const v = String(row[col] || '').trim();
+      if (!v) return;
+      const h = HEADERS.filter(function (x) { return x[0].test(v); })[0];
+      if (h) { cat = h[1]; return; }
+      if (/^total$/i.test(v)) { cat = null; return; }
+      if (!cat) return;
+      const m = menu[cat] || (menu[cat] = { names: [], col: col + 1, first: r + 1, last: r + 1 });
+      m.names.push(v);
+      m.last = r + 1;
+    });
+  });
+  Object.keys(menu).forEach(function (k) {
+    const m = menu[k];
+    m.range = sh.getRange(m.first, m.col, m.last - m.first + 1, 1);
+  });
+  return menu;
+}
+
+function readShops(masterUrl) {
+  if (!masterUrl) throw new Error('Add the master database link in the app settings.');
+  const ss = SpreadsheetApp.openByUrl(masterUrl);
+  const sh = ss.getSheets().filter(function (s) { return /shop list/i.test(s.getName()); })[0] || ss.getSheets()[0];
+  const seen = {};
+  return sh.getRange(2, 1, Math.max(1, sh.getLastRow() - 1), 1).getDisplayValues()
+    .map(function (r) { return String(r[0]).trim(); })
+    .filter(function (v) { if (!v || seen[v]) return false; seen[v] = true; return true; });
+}
+
+// Shops already on this file's Shop Orders tab (copied standing orders and anything typed in).
+function existingShops(ss) {
+  const sh = ss.getSheetByName(ORDERS_TAB);
+  if (!sh || !sh.getLastRow()) return [];
+  return sh.getRange(1, 1, sh.getLastRow(), WIDTH).getDisplayValues()
+    .filter(function (r) { return r[0] !== '' && !isNaN(r[0]) && String(r[1]).trim(); })
+    .map(function (r) { return { shop: String(r[1]).trim(), standing: /standing order/i.test(r.slice(2).join(' ')) }; });
+}
+
+// The Incoming Orders tab, created on first use. A copied file brings last time's tab along,
+// so a tab stamped with another file's id is replaced with a fresh one.
+function incomingTab(ss, name) {
+  const stamp = 'orderintake:' + ss.getId();
+  let sh = ss.getSheetByName(name);
+  if (sh && sh.getRange(1, 1).getNote() !== stamp) { ss.deleteSheet(sh); sh = null; }
+  if (sh) return sh;
+  sh = ss.insertSheet(name);
+  const widths = [32, 290, 30, 315, 34, 262, 30, 320, 32, 258, 38, 65];
+  widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
+  const head = sh.getRange(1, 1, 2, WIDTH);
+  head.setValues([
+    ['', '', '', 'Loaf Cakes', '', 'Cupcakes', '', 'Brownies', '', 'Cookies/Biscuits', '', 'Labels'],
+    ['', 'Round Cakes', '', '', '', '', '', 'Blondies/Bars', '', '', '', '']
+  ]).setFontFamily('Arial').setFontWeight('bold').setFontSize(12);
+  sh.getRange(1, 1, 2, 1).setBackground(COLOURS.num);
+  sh.getRange(1, 2).setBackground('#000000');
+  sh.getRange(1, 4).setBackground(COLOURS.loaf);
+  sh.getRange(1, 6).setBackground(COLOURS.cupcake);
+  sh.getRange(1, 8).setBackground(COLOURS.brownie);
+  sh.getRange(2, 8).setBackground(COLOURS.blondie);
+  sh.getRange(1, 10).setBackground(COLOURS.cookie);
+  sh.getRange(1, 1).setNote(stamp);
+  sh.setFrozenRows(2);
+  return sh;
+}
+
 // Shop blocks, top to bottom. A block runs from its shop row to the row before the next one.
 function blocks(sh) {
   const last = sh.getLastRow();
-  if (!last) return [];
+  if (last < 3) return [];
   const ids = sh.getRange(1, ID_COL, last, 1).getValues();
   const starts = [];
   ids.forEach(function (r, i) {
@@ -407,54 +540,68 @@ function blocks(sh) {
     if (m) starts.push({ id: m[1], row: i + 1 });
   });
   return starts.map(function (s, i) {
-    const isLast = i + 1 === starts.length;
-    return { id: s.id, row: s.row, end: isLast ? last : starts[i + 1].row - 1, last: isLast };
+    return { id: s.id, row: s.row, end: i + 1 < starts.length ? starts[i + 1].row - 1 : last };
   });
 }
 
-function upsert(sh, o, spacer) {
-  const rows = o.rows.map(function (r) {
-    const a = r.slice(0, WIDTH);
-    while (a.length < WIDTH) a.push('');
-    return a;
-  });
+function upsert(sh, o, menu, shops) {
   const b = blocks(sh).filter(function (x) { return x.id === o.id; })[0];
   if (b) {
-    const data = b.last ? rows : rows.concat(blankRows(spacer));
-    sh.insertRowsBefore(b.row, data.length);
-    sh.deleteRows(b.row + data.length, b.end - b.row + 1);
-    write(sh, b.row, data, o.id);
+    sh.insertRowsBefore(b.row, o.rows.length);
+    sh.deleteRows(b.row + o.rows.length, b.end - b.row + 1);
+    write(sh, b.row, o, menu, shops);
   } else {
-    const last = sh.getLastRow();
-    const start = last ? last + 1 + spacer : 1;
-    const need = start + rows.length - 1 - sh.getMaxRows();
+    const start = Math.max(3, sh.getLastRow() + 1);
+    const need = start + o.rows.length - 1 - sh.getMaxRows();
     if (need > 0) sh.insertRowsAfter(sh.getMaxRows(), need);
-    write(sh, start, rows, o.id);
+    write(sh, start, o, menu, shops);
   }
 }
 
-function write(sh, start, data, id) {
-  const values = data.map(function (r, i) {
-    const row = r.map(function (v) { return v !== '' && !isNaN(v) ? Number(v) : v; });
-    row.push('', i === 0 ? 'order:' + id : '');
+// o.rows: [{ type: 'shop' | 'item', cells: [A..K], hcat: 'brownie' | 'blondie' }]
+function write(sh, start, o, menu, shops) {
+  const n = o.rows.length;
+  const values = o.rows.map(function (r, i) {
+    const row = r.cells.slice(0, WIDTH).map(function (v) { return v !== '' && !isNaN(v) && i > 0 ? Number(v) : v; });
+    while (row.length < WIDTH) row.push('');
+    row.push(i === 0 ? 'order:' + o.id : '');
     return row;
   });
-  sh.getRange(start, 1, values.length, ID_COL).setValues(values).setFontWeight('normal');
-  sh.getRange(start, 1, 1, 2).setFontWeight('bold');
-  sh.getRange(start, ID_COL, values.length, 1).setFontColor('#bbbbbb');
-}
+  const all = sh.getRange(start, 1, n, ID_COL);
+  all.clearDataValidations().setValues(values)
+    .setFontFamily('Arial').setFontWeight('bold').setFontSize(12).setFontColor('#000000');
+  sh.getRange(start, ID_COL, n, 1).setFontColor('#bbbbbb').setFontWeight('normal').setFontSize(9);
 
-function blankRows(n) {
-  const out = [];
-  for (let i = 0; i < n; i++) out.push(new Array(WIDTH).fill(''));
-  return out;
+  const bg = o.rows.map(function (r) {
+    if (r.type === 'shop') return [COLOURS.shopNum, COLOURS.shopName].concat(new Array(WIDTH - 2).fill(COLOURS.shopBar));
+    return [COLOURS.num, COLOURS.white, COLOURS.white, COLOURS.loaf, COLOURS.white, COLOURS.cupcake, COLOURS.white,
+      r.hcat === 'blondie' ? COLOURS.blondie : COLOURS.brownie, COLOURS.white, COLOURS.cookie, COLOURS.white, COLOURS.white];
+  });
+  sh.getRange(start, 1, n, WIDTH).setBackgrounds(bg);
+  sh.getRange(start, 3, 1, WIDTH - 2).setFontColor(COLOURS.white);
+
+  // dropdowns: warn on anything off-list (red corner) rather than reject, like Shop Orders
+  const list = function (range) { return range ? SpreadsheetApp.newDataValidation().requireValueInRange(range, true).setAllowInvalid(true).build() : null; };
+  const rules = {
+    round: list(menu.round && menu.round.range), loaf: list(menu.loaf && menu.loaf.range), cupcake: list(menu.cupcake && menu.cupcake.range),
+    brownie: list(menu.brownie && menu.brownie.range), blondie: list(menu.blondie && menu.blondie.range), cookie: list(menu.cookie && menu.cookie.range)
+  };
+  const shopRule = SpreadsheetApp.newDataValidation().requireValueInList(shops, true).setAllowInvalid(true).build();
+  const dv = o.rows.map(function (r) {
+    const row = new Array(WIDTH).fill(null);
+    if (r.type === 'shop') { row[1] = shopRule; return row; }
+    row[1] = rules.round; row[3] = rules.loaf; row[5] = rules.cupcake;
+    row[7] = r.hcat === 'blondie' ? rules.blondie : rules.brownie; row[9] = rules.cookie;
+    return row;
+  });
+  sh.getRange(start, 1, n, WIDTH).setDataValidations(dv);
 }
 
 function removeBlock(sh, id) {
   const b = blocks(sh).filter(function (x) { return x.id === id; })[0];
   if (!b) return;
   const len = b.end - b.row + 1;
-  if (len >= sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), 1);
+  if (len >= sh.getMaxRows() - 2) sh.insertRowsAfter(sh.getMaxRows(), 1);
   sh.deleteRows(b.row, len);
 }
 
@@ -496,7 +643,10 @@ let shops    = store.get('shops', DEFAULT_SHOPS);
 let orders   = store.get('orders', []);           // [{shop, items:[{name, cat, qty}]}]
 let learned  = store.get('learned', {});          // normalised line → product name
 let learnedShops = store.get('learnedShops', {}); // normalised sender → shop
-let settings = { spacer: 0, sheetUrl: '', sheetTab: 'Order Intake', sheetKey: '', autoSend: false, ...store.get('settings', {}) };
+let settings = { spare: 1, sheetUrl: '', masterUrl: '', nameFilter: 'MENU', sheetTab: 'Incoming Orders', fileId: '', sheetKey: '', autoSend: false, ...store.get('settings', {}) };
+if (settings.sheetTab === 'Order Intake') settings.sheetTab = 'Incoming Orders';
+// lists loaded from Google Sheets: delivery files, the chosen file's menu, master shop list
+let remote = store.get('remote', null);
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 if (!settings.sheetKey) {
   const b = new Uint8Array(12); crypto.getRandomValues(b);
@@ -772,10 +922,40 @@ function renderItems() {
   if (draft.editing != null) $('#editingName').textContent = draft.shop || '';
   renderShopTag();
 }
+const canonShop = v => shops.find(s => s.toLowerCase() === String(v).trim().toLowerCase()) || null;
+// closest shops on the list for a name that isn't on it ("Resta" → "Resta Coffee")
+function shopSuggestions(text, n = 3) {
+  const it = tokens(text), nt = normText(text);
+  if (!it.length) return [];
+  return shops.map(s => {
+    const st = tokens(s);
+    const hit = it.reduce((a, t) => a + Math.max(0, ...st.map(x => tokSim(t, x))), 0);
+    let score = hit / Math.max(it.length, st.length * 0.75);
+    if (normText(s).includes(nt) || nt.includes(normText(s))) score += 0.3;
+    return { s, score };
+  }).filter(x => x.score >= 0.34).sort((a, b) => b.score - a.score).slice(0, n).map(x => x.s);
+}
 function renderShopTag() {
   const v = $('#shop').value.trim();
-  $('#shopTag').innerHTML = !v ? '' : shops.includes(v) ? '<span class="tag good">Known shop</span>' : '<span class="tag warn">New shop</span>';
+  const shop = canonShop(v);
+  let tag = '';
+  if (v && shop) {
+    const ex = remote && (remote.existing || []).find(e => e.shop.toLowerCase() === shop.toLowerCase());
+    tag = ex ? `<span class="tag warn">${ex.standing ? 'Standing order on this sheet' : 'Already on this sheet'}</span>` : '<span class="tag good">On the shop list</span>';
+  } else if (v) tag = '<span class="tag bad">Not on the shop list</span>';
+  $('#shopTag').innerHTML = tag;
+  const box = $('#shopSuggest');
+  const sug = v && !shop ? shopSuggestions(v) : [];
+  box.hidden = !sug.length;
+  box.innerHTML = sug.length ? '<span class="hint" style="margin:0">Did you mean</span>' + sug.map(s => `<button class="btn small" data-shop="${esc(s)}">${esc(s)}</button>`).join('') : '';
 }
+$('#shopSuggest').addEventListener('click', e => {
+  const s = e.target.dataset.shop; if (!s) return;
+  // remember the wording so it's recognised next time
+  [ $('#shop').value, draft.sender ].forEach(t => { if (t && normText(t)) learnedShops[normText(t)] = s; });
+  store.set('learnedShops', learnedShops);
+  $('#shop').value = draft.shop = s; saveDraft(); renderShopTag();
+});
 
 $('#items').addEventListener('input', e => {
   const row = e.target.closest('.item'); if (!row) return;
@@ -839,8 +1019,9 @@ function cancelEdit() {
 $('#cancelEdit').onclick = cancelEdit;
 
 $('#approve').onclick = () => {
-  const shop = $('#shop').value.trim();
-  if (!shop) { toast('Add the shop name first'); $('#shop').focus(); return; }
+  if (!$('#shop').value.trim()) { toast('Add the shop name first'); $('#shop').focus(); return; }
+  const shop = canonShop($('#shop').value);
+  if (!shop) { toast('Pick a shop from the shop list so invoicing can find it'); $('#shop').focus(); return; }
   const items = draft.items.filter(it => it.qty !== 0);
   if (!items.length) { toast('No items to add'); return; }
   if (items.some(it => !it.name)) { toast('Pick a product for every item (or remove it)'); return; }
@@ -849,7 +1030,6 @@ $('#approve').onclick = () => {
   // learn from this order: each source line → the product it ended up as
   items.forEach(it => { if (it.src) { const k = tokens(extractQty(it.src).rest).join(' '); if (k) learned[k] = it.name; } });
   store.set('learned', learned);
-  if (!shops.includes(shop)) { shops.push(shop); store.set('shops', shops); renderShopList(); }
   if (draft.sender && normText(draft.sender) !== normText(shop)) { learnedShops[normText(draft.sender)] = shop; store.set('learnedShops', learnedShops); }
 
   // merge duplicate products, keep first-seen order
@@ -881,9 +1061,10 @@ function orderRows(o, n) {
       const c = CATS.find(c => c.key === it.cat) || CATS[0];
       groups[c.group].push(it);
     });
-    const h = Math.max(1, ...groups.map(g => g.length));
+    const h = Math.max(1, ...groups.map(g => g.length)) + Math.max(0, settings.spare ?? 1);
     for (let r = 0; r < h; r++) {
-      const cells = new Array(11).fill(''); const hcat = groups[3][r] ? groups[3][r].cat : null;
+      // brown (brownie) and pink (blondie) cells in column H; empty ones alternate
+      const cells = new Array(11).fill(''); const hcat = groups[3][r] ? groups[3][r].cat : (r % 2 ? 'blondie' : 'brownie');
       groups.forEach((g, gi) => {
         if (!g[r]) return;
         const ni = COLS.indexOf(GROUP_COLS[gi][0]);
@@ -898,7 +1079,6 @@ function buildRows() {
   const rows = [];
   orders.forEach((o, n) => {
     rows.push(...orderRows(o, n));
-    for (let s = 0; s < (settings.spacer || 0); s++) rows.push({ type: 'blank', cells: new Array(11).fill('') });
   });
   return rows;
 }
@@ -915,7 +1095,7 @@ function renderSheet() {
       r.cells.forEach((v, ci) => {
         const col = COLS[ci];
         let cls = col + (r.type === 'shop' && ci > 1 ? ' data' : '');
-        if (r.type !== 'shop' && (col === 'H' || col === 'I')) cls += ' ' + (r.hcat || (i % 2 ? 'blondie' : 'brownie'));
+        if (r.type !== 'shop' && col === 'H') cls += ' ' + r.hcat;
         h += `<td class="${cls}">${esc(v)}</td>`;
       });
       h += '</tr>';
@@ -970,7 +1150,7 @@ $('#ordersList').addEventListener('click', async e => {
     if (!(await ask(`Delete ${o.shop}'s order?${inSheet ? ' It will also be removed from your Google Sheet.' : ''}`, 'Delete'))) return;
     orders.splice(+d.del, 1); store.set('orders', orders); renderSheet();
     if (inSheet) {
-      try { await sheetPost({ action: 'delete', ids: [o.id] }); toast(`Deleted ${o.shop} here and in Google Sheets`); }
+      try { await sheetPost({ action: 'delete', ids: [o.id], fileId: o.sentTo || settings.fileId }); toast(`Deleted ${o.shop} here and in Google Sheets`); }
       catch (err) { toast(`Deleted here, but not in Google Sheets: ${err.message}`); }
     }
   } else if (d.up != null) {
@@ -995,32 +1175,86 @@ $('#ordersList').addEventListener('click', async e => {
 });
 
 // ─────────────────────────── Google Sheet ───────────────────────────
-const sheetConnected = () => /^https:\/\/script\.google(usercontent)?\.com\//.test(settings.sheetUrl || '');
+const sheetConnected = () => /^https:\/\/script\.google(usercontent)?\.com\//.test(settings.sheetUrl || '') && !!settings.masterUrl;
 async function sheetPost(payload) {
   let res;
   try {
     // text/plain body keeps this a "simple" request, which Apps Script web apps accept cross-origin
-    res = await fetch(settings.sheetUrl, { method: 'POST', body: JSON.stringify({ key: settings.sheetKey, tab: settings.sheetTab || 'Order Intake', spacer: settings.spacer || 0, ...payload }) });
+    res = await fetch(settings.sheetUrl, { method: 'POST', body: JSON.stringify({
+      key: settings.sheetKey, tab: settings.sheetTab || 'Incoming Orders', master: settings.masterUrl,
+      nameFilter: settings.nameFilter || 'MENU', fileId: settings.fileId, ...payload }) });
   } catch { throw new Error("couldn't reach Google. Check you're online and the web app URL is right."); }
   let data;
   try { data = await res.json(); }
   catch { throw new Error('Google sent back a sign-in page. In the Apps Script deployment, set "Who has access" to Anyone.'); }
-  if (!data.ok) throw new Error(data.error || 'the sheet refused the orders.');
+  if (!data.ok) throw new Error(data.error || 'the sheet refused the request.');
   return data;
 }
+
+// use the delivery sheet's menu and the master shop list in place of the built-in lists
+function applyRemote() {
+  if (!remote) return;
+  catalog = Object.fromEntries(CATS.map(c => [c.key, (remote.menu && remote.menu[c.key]) || []]));
+  shops = remote.shops || [];
+  buildIndex(); renderShopList(); renderFile(); renderItems(); renderSheet();
+}
+let loadingCfg = false;
+async function loadConfig(quiet) {
+  if (!sheetConnected() || loadingCfg) return;
+  loadingCfg = true; renderFile();
+  try {
+    let d = await sheetPost({ action: 'config' });
+    // a delivery sheet created since last time (the next day's copy) becomes the one we send to
+    const known = new Set(((remote && remote.files) || []).map(f => f.id));
+    if (known.size && d.files[0] && !known.has(d.files[0].id) && d.fileId !== d.files[0].id) {
+      settings.fileId = d.files[0].id;
+      d = await sheetPost({ action: 'config' });
+      if (quiet) toast(`New delivery sheet found: sending to ${d.fileName}`);
+    }
+    remote = { files: d.files, fileId: d.fileId, fileName: d.fileName, menu: d.menu, shops: d.shops, existing: d.existing, at: Date.now() };
+    settings.fileId = d.fileId; store.set('settings', settings); store.set('remote', remote);
+    loadingCfg = false; applyRemote();
+    return d;
+  } catch (err) {
+    loadingCfg = false; renderFile();
+    if (!quiet) throw err;
+    toast(`Couldn't refresh from Google Sheets (${err.message}) Using the saved lists.`);
+  }
+}
+function renderFile() {
+  const card = $('#fileCard');
+  card.hidden = !sheetConnected();
+  if (card.hidden) return;
+  const files = (remote && remote.files) || [];
+  $('#fileSel').innerHTML = files.length ? files.map(f => `<option value="${esc(f.id)}"${f.id === settings.fileId ? ' selected' : ''}>${esc(f.name)}</option>`).join('') : '<option>Loading…</option>';
+  $('#refreshCfg').disabled = loadingCfg;
+  $('#refreshCfg').textContent = loadingCfg ? 'Loading…' : 'Refresh';
+  if (!remote) { $('#fileInfo').textContent = 'Loading your delivery sheets…'; return; }
+  const nProducts = Object.values(remote.menu || {}).reduce((a, l) => a + l.length, 0);
+  const ex = remote.existing || [], standing = ex.filter(e => e.standing).length;
+  $('#fileInfo').textContent = `Orders go into its "${settings.sheetTab || 'Incoming Orders'}" tab. Menu: ${nProducts} products. Shops: ${(remote.shops || []).length}. Already on this sheet: ${ex.length} shop${ex.length === 1 ? '' : 's'}${standing ? ` (${standing} standing order${standing === 1 ? '' : 's'})` : ''}.`;
+}
+$('#fileSel').onchange = async () => {
+  settings.fileId = $('#fileSel').value; store.set('settings', settings);
+  try { const d = await loadConfig(); toast(`Sending to ${d.fileName}`); } catch (err) { toast(`Couldn't open that sheet: ${err.message}`); }
+};
+$('#refreshCfg').onclick = async () => {
+  try { await loadConfig(); toast('Menu, shops and delivery sheets refreshed'); } catch (err) { toast(`Couldn't refresh: ${err.message}`); }
+};
+
 let sending = false;
 async function sendUnsent() {
-  if (!sheetConnected()) { toast('Connect your Google Sheet in Settings first'); showTab('settings'); return; }
+  if (!sheetConnected()) { toast('Connect Google Sheets in Settings first'); showTab('settings'); return; }
   const todo = orders.map((o, i) => ({ o, i })).filter(x => !x.o.sent);
   if (!todo.length) return toast('Everything is already in Google Sheets');
   if (sending) return;
   sending = true; renderSendBar();
   try {
-    const data = await sheetPost({ orders: todo.map(({ o, i }) => ({ id: o.id, shop: o.shop, rows: orderRows(o, i).map(r => r.cells) })) });
+    const data = await sheetPost({ orders: todo.map(({ o, i }) => ({ id: o.id, shop: o.shop, rows: orderRows(o, i).map(r => ({ type: r.type, cells: r.cells, hcat: r.hcat })) })) });
     const ok = new Set(data.sent || []);
-    orders.forEach(o => { if (ok.has(o.id)) o.sent = true; });
+    orders.forEach(o => { if (ok.has(o.id)) { o.sent = true; o.sentTo = settings.fileId; } });
     store.set('orders', orders);
-    toast(`Sent ${ok.size} order${ok.size === 1 ? '' : 's'} to "${settings.sheetTab || 'Order Intake'}"`);
+    toast(`Sent ${ok.size} order${ok.size === 1 ? '' : 's'} to ${data.file || 'Google Sheets'}`);
   } catch (err) {
     toast(`Not sent: ${err.message}`);
   } finally {
@@ -1032,55 +1266,64 @@ function renderSendBar() {
   const btn = $('#sendSheet');
   btn.disabled = sending || (sheetConnected() && !unsent);
   btn.textContent = sending ? 'Sending…' : !sheetConnected() ? 'Send to Google Sheet' : unsent ? `Send ${unsent} to Google Sheet` : 'All sent';
+  const file = remote && remote.fileName;
   $('#sendHint').textContent = sheetConnected()
-    ? `Sends new and edited orders to the "${settings.sheetTab || 'Order Intake'}" tab. Edited orders replace their old rows. You can also copy and paste the rows yourself.`
-    : 'Connect your Google Sheet in Settings to send orders straight to it, or copy the rows, click column A where shop no.1 goes in your sheet, and paste. Values only, so your colours stay put.';
+    ? `Adds new and edited orders to the "${settings.sheetTab || 'Incoming Orders'}" tab of ${file || 'the delivery sheet'}, with the same colours and dropdowns as Shop Orders. Check them there, then copy them into Shop Orders.`
+    : 'Connect Google Sheets in Settings to send orders straight to your delivery sheet. Copy all copies text only, without dropdowns.';
 }
 $('#sendSheet').onclick = sendUnsent;
 
 function renderSheetSettings() {
   $('#gsUrl').value = settings.sheetUrl || '';
-  $('#gsTab').value = settings.sheetTab || 'Order Intake';
+  $('#gsMaster').value = settings.masterUrl || '';
+  $('#gsFilter').value = settings.nameFilter || 'MENU';
+  $('#gsTab').value = settings.sheetTab || 'Incoming Orders';
   $('#gsAuto').checked = !!settings.autoSend;
   const on = sheetConnected();
   $('#gsTag').innerHTML = on ? '<span class="tag good">Connected</span>' : '<span class="tag warn">Not connected</span>';
   $('#gsDisconnect').hidden = $('#gsLink').hidden = !on;
 }
 $('#copyScript').onclick = () => copyText($('#gasSource').textContent.trim().replace('__KEY__', settings.sheetKey) + '\n', 'Script copied, paste it into Apps Script');
-$('#gsTab').onchange = () => { settings.sheetTab = $('#gsTab').value.trim() || 'Order Intake'; store.set('settings', settings); renderSheet(); };
+$('#gsTab').onchange = () => { settings.sheetTab = $('#gsTab').value.trim() || 'Incoming Orders'; store.set('settings', settings); renderFile(); renderSheet(); };
 $('#gsAuto').onchange = () => { settings.autoSend = $('#gsAuto').checked; store.set('settings', settings); };
 $('#gsTest').onclick = async () => {
-  const url = $('#gsUrl').value.trim();
+  const url = $('#gsUrl').value.trim(), master = $('#gsMaster').value.trim();
   if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec/.test(url)) return toast('Paste the Web app URL. It starts with https://script.google.com/macros/s/ and ends in /exec');
-  const prev = settings.sheetUrl;
-  settings.sheetUrl = url; settings.sheetTab = $('#gsTab').value.trim() || 'Order Intake';
-  $('#gsTest').disabled = true; $('#gsTest').textContent = 'Testing…';
+  if (!/^https:\/\/docs\.google\.com\/spreadsheets\/d\//.test(master)) return toast('Paste the master database link. It starts with https://docs.google.com/spreadsheets/d/');
+  const prev = { ...settings };
+  Object.assign(settings, { sheetUrl: url, masterUrl: master, nameFilter: $('#gsFilter').value.trim() || 'MENU', sheetTab: $('#gsTab').value.trim() || 'Incoming Orders' });
+  $('#gsTest').disabled = true; $('#gsTest').textContent = 'Connecting…';
   try {
-    const d = await sheetPost({ action: 'ping' });
+    const d = await loadConfig();
     store.set('settings', settings);
-    toast(`Connected to "${d.spreadsheet}", tab "${d.tab}"`);
+    toast(`Connected. ${d.files.length} delivery sheet${d.files.length === 1 ? '' : 's'} found, sending to ${d.fileName}`);
   } catch (err) {
-    settings.sheetUrl = prev;
+    settings = prev;
     toast(`Not connected: ${err.message}`);
   }
-  $('#gsTest').disabled = false; $('#gsTest').textContent = 'Test connection';
-  renderSheetSettings(); renderSheet();
+  $('#gsTest').disabled = false; $('#gsTest').textContent = 'Connect';
+  renderSettings(); renderSheet(); renderFile();
 };
 $('#gsDisconnect').onclick = async () => {
-  if (!(await ask('Disconnect from Google Sheets? Orders already sent stay in the sheet.', 'Disconnect'))) return;
-  settings.sheetUrl = ''; store.set('settings', settings); renderSheetSettings(); renderSheet();
+  if (!(await ask('Disconnect from Google Sheets? Orders already sent stay in the sheet, and the app goes back to its own menu and shop list.', 'Disconnect'))) return;
+  settings.sheetUrl = ''; remote = null; store.set('settings', settings); store.set('remote', null);
+  catalog = store.get('catalog', DEFAULT_CATALOG); shops = store.get('shops', DEFAULT_SHOPS);
+  buildIndex(); renderShopList(); renderSettings(); renderSheet(); renderFile(); renderItems();
 };
-// a link that sets up another device (phone ↔ desktop) with the same sheet and key
+// a link that sets up another device (phone ↔ desktop) with the same script, key and master database
 $('#gsLink').onclick = () => {
-  const code = btoa(JSON.stringify({ u: settings.sheetUrl, k: settings.sheetKey, t: settings.sheetTab }));
+  const code = btoa(unescape(encodeURIComponent(JSON.stringify({ u: settings.sheetUrl, k: settings.sheetKey, t: settings.sheetTab, m: settings.masterUrl, f: settings.nameFilter }))));
   copyText(location.href.split('#')[0] + '#connect=' + code, 'Link copied. Open it on your other device.');
 };
 function applyConnectLink() {
   const m = location.hash.match(/^#connect=(.+)$/);
   if (!m) return;
   try {
-    const c = JSON.parse(atob(m[1]));
-    if (c.u && c.k) { settings.sheetUrl = c.u; settings.sheetKey = c.k; settings.sheetTab = c.t || 'Order Intake'; store.set('settings', settings); toast('Connected to your Google Sheet'); }
+    const c = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
+    if (c.u && c.k) {
+      Object.assign(settings, { sheetUrl: c.u, sheetKey: c.k, sheetTab: c.t || 'Incoming Orders', masterUrl: c.m || '', nameFilter: c.f || 'MENU' });
+      store.set('settings', settings); toast('Connected to Google Sheets');
+    }
   } catch { toast("That connect link didn't work. Copy it again from your other device."); }
   history.replaceState(null, '', location.pathname + location.search);
 }
@@ -1103,8 +1346,15 @@ function renderTotals() {
 
 // ─────────────────────────── Settings ───────────────────────────
 function renderSettings() {
-  $('#spacer').value = settings.spacer || 0;
+  $('#spare').value = settings.spare ?? 1;
   renderSheetSettings();
+  const live = !!(sheetConnected() && remote);
+  $('#menuLocal').hidden = $('#shopsLocal').hidden = live;
+  $('#menuRemote').hidden = $('#shopsRemote').hidden = !live;
+  if (live) {
+    $('#menuRemote').textContent = `From the Menu tab of ${remote.fileName}. Change the menu there, then tap Refresh on the New order screen.`;
+    $('#shopsRemote').textContent = `${remote.shops.length} shops from the master database. Add new shops there, then tap Refresh.`;
+  }
   $('#catalogEditors').innerHTML = CATS.map(c => `<div><label class="lbl" for="cat-${c.key}">${esc(c.label)}</label><textarea id="cat-${c.key}">${esc((catalog[c.key] || []).join('\n'))}</textarea></div>`).join('');
   $('#shopsEdit').value = shops.join('\n');
   const n = Object.keys(learned).length + Object.keys(learnedShops).length;
@@ -1112,7 +1362,7 @@ function renderSettings() {
 }
 function renderShopList() { $('#shopList').innerHTML = shops.map(s => `<option value="${esc(s)}">`).join(''); }
 const lines = v => v.split('\n').map(s => s.trim()).filter(Boolean);
-$('#spacer').onchange = () => { settings.spacer = Math.max(0, Math.min(20, +$('#spacer').value || 0)); store.set('settings', settings); renderSheet(); };
+$('#spare').onchange = () => { settings.spare = Math.max(0, Math.min(10, +$('#spare').value || 0)); store.set('settings', settings); renderSheet(); };
 $('#saveMenu').onclick = () => {
   CATS.forEach(c => catalog[c.key] = lines($('#cat-' + c.key).value));
   store.set('catalog', catalog); buildIndex(); renderItems(); renderTotals(); toast('Menu saved');
@@ -1137,12 +1387,15 @@ function showTab(name) {
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
 applyConnectLink();
+if (sheetConnected() && remote) { catalog = Object.fromEntries(CATS.map(c => [c.key, (remote.menu && remote.menu[c.key]) || []])); shops = remote.shops || []; }
 buildIndex();
 renderShopList();
 $('#paste').value = draft.paste || '';
 $('#shop').value = draft.shop || '';
 renderItems();
 renderSheet();
+renderFile();
+loadConfig(true);
 </script>
 </body>
 </html>

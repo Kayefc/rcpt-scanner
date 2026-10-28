@@ -10,4 +10,10 @@ Add a new site from this GitHub repo with **Base directory** `orders`, no build 
 
 ### Sending to Google Sheets
 
-In the app, open **Settings → Google Sheet** and follow the steps: copy the script into the sheet's Apps Script editor, deploy it as a web app (Execute as: Me, Who has access: Anyone), paste the web app URL and test. Orders go to an "Order Intake" tab; column M holds an id per shop so edited orders replace their old rows. Use **Copy link for another device** to connect your phone and desktop to the same sheet.
+The app talks to one standalone Apps Script (copied from **Settings → Google Sheets**, deployed as a web app: Execute as Me, Who has access Anyone). The script:
+
+- finds the delivery sheets in Drive (Google Sheets with "MENU" in the name, newest first) and switches to a newly copied one automatically;
+- reads that sheet's **Menu** tab for the products and the master database's shop list for shop names, so names always match the formulas and invoicing;
+- adds approved orders to an **Incoming Orders** tab in that sheet, formatted like Shop Orders with the same dropdowns, ready to check and copy across. It never edits Shop Orders or any other tab. Column M holds an id per shop block so edited orders replace their old rows.
+
+Use **Copy link for another device** to connect a phone and a desktop to the same setup.
