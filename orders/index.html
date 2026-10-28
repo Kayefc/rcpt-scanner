@@ -229,6 +229,7 @@
   .modal { position: fixed; inset: 0; background: var(--overlay); display: grid; place-items: center; padding: 16px; z-index: 60; }
   .modal-box { background: #fff; border-top: 10px solid #000; border-radius: var(--radius); padding: 20px; max-width: 400px; width: 100%; }
   .modal-box p { line-height: 1.45; font-weight: 600; font-size: 16px; }
+  .modal-box .modal-detail { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; margin-top: 8px; overflow-wrap: anywhere; }
   ol.steps { list-style: none; counter-reset: step; display: flex; flex-direction: column; gap: 12px; line-height: 1.45; margin-bottom: 14px; }
   ol.steps li { counter-increment: step; display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; }
   ol.steps li::before { content: counter(step); width: 30px; height: 30px; border-radius: 50%; background: #000; color: #fff; display: grid; place-items: center; font-weight: 700; }
@@ -432,6 +433,7 @@
 <div class="modal" id="modal" hidden>
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modalMsg">
     <p id="modalMsg"></p>
+    <p class="modal-detail" id="modalDetail" hidden></p>
     <div class="actions">
       <button class="btn" id="modalNo">Cancel</button>
       <button class="btn primary" id="modalYes">OK</button>
@@ -504,23 +506,42 @@ function reply(obj) {
 }
 
 // Delivery files, the chosen file's menu and shops already on it, and the master shop list.
+// The delivery date in a file name such as MENU_Friday_30_10_26 or MENU_Wed_28_10_2026, as 20261030.
+function dateKey(name) {
+  const m = /(\d{1,2})[ _.\/-]+(\d{1,2})[ _.\/-]+(\d{4}|\d{2})(?!\d)/.exec(name);
+  if (!m) return null;
+  const d = +m[1], mo = +m[2], y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return y * 10000 + mo * 100 + d;
+}
+
 function config(req) {
-  const filter = String(req.nameFilter || 'MENU').replace(/['\\]/g, '');
-  const it = DriveApp.searchFiles("title contains '" + filter + "' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false");
+  const prefix = String(req.nameFilter || 'MENU').trim().replace(/['\\]/g, '');
+  const it = DriveApp.searchFiles("title contains '" + prefix + "' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false");
   const files = [];
-  while (it.hasNext() && files.length < 300) {
+  while (it.hasNext() && files.length < 500) {
     const f = it.next();
-    files.push({ id: f.getId(), name: f.getName(), created: f.getDateCreated().getTime() });
+    const name = f.getName();
+    // only names that start with the prefix, so "Copy of MENU..." and "OLD_MENU..." are left out
+    if (name.toUpperCase().indexOf(prefix.toUpperCase()) !== 0) continue;
+    files.push({ id: f.getId(), name: name, created: f.getDateCreated().getTime(), key: dateKey(name) });
   }
-  files.sort(function (a, b) { return b.created - a.created; });
+  if (!files.length) throw new Error('No Google Sheets whose names start with "' + prefix + '" were found in your Drive.');
+  // newest delivery date first; files without a date in the name go last
+  files.sort(function (a, b) { return (b.key || 0) - (a.key || 0) || b.created - a.created; });
+  const today = Number(String(req.today || '').replace(/-/g, '')) || 0;
+  // the next delivery after today: by the time orders are entered on a delivery day, that run has gone
+  const upcoming = files.filter(function (f) { return f.key && f.key > today; })
+    .sort(function (a, b) { return a.key - b.key || b.created - a.created; })[0];
+  const next = upcoming || files[0];
   const top = files.slice(0, 15);
-  if (!top.length) throw new Error('No Google Sheets with "' + filter + '" in their name were found in your Drive.');
-  const fileId = top.some(function (f) { return f.id === req.fileId; }) ? req.fileId : top[0].id;
+  if (!top.some(function (f) { return f.id === next.id; })) top.push(next);
+  const fileId = top.some(function (f) { return f.id === req.fileId; }) ? req.fileId : next.id;
   const ss = SpreadsheetApp.openById(fileId);
   const menu = readMenu(ss);
   const products = {};
   Object.keys(menu).forEach(function (k) { products[k] = menu[k].names; });
-  return { ok: true, files: top, fileId: fileId, fileName: ss.getName(), menu: products, shops: readShops(req.master), existing: existingShops(ss) };
+  return { ok: true, files: top, fileId: fileId, nextId: next.id, today: today, fileName: ss.getName(), menu: products, shops: readShops(req.master), existing: existingShops(ss) };
 }
 
 // Menu tab: section headings (Round Cakes, Loaf Cakes, ...) in columns A, D and G, products under them, TOTAL ends a section.
@@ -937,10 +958,11 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200); }
 // in-page replacement for confirm(), which some embedded viewers block
-function ask(msg, yes = 'OK') {
+function ask(msg, yes = 'OK', detail = '') {
   return new Promise(res => {
     const m = $('#modal');
     $('#modalMsg').textContent = msg; $('#modalYes').textContent = yes;
+    $('#modalDetail').textContent = detail; $('#modalDetail').hidden = !detail;
     m.hidden = false; $('#modalYes').focus();
     const done = v => { m.hidden = true; $('#modalYes').onclick = $('#modalNo').onclick = null; res(v); };
     $('#modalYes').onclick = () => done(true);
@@ -1265,6 +1287,9 @@ $('#ordersList').addEventListener('click', async e => {
 });
 
 // ─────────────────────────── Google Sheet ───────────────────────────
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+// a delivery sheet chosen by hand in the picker; otherwise the next delivery by date is used
+let pickedFileId = '';
 const sheetConnected = () => /^https:\/\/script\.google(usercontent)?\.com\//.test(settings.sheetUrl || '') && !!settings.masterUrl;
 async function sheetPost(payload) {
   let res;
@@ -1272,7 +1297,7 @@ async function sheetPost(payload) {
     // text/plain body keeps this a "simple" request, which Apps Script web apps accept cross-origin
     res = await fetch(settings.sheetUrl, { method: 'POST', body: JSON.stringify({
       key: settings.sheetKey, tab: settings.sheetTab || 'Incoming Orders', master: settings.masterUrl,
-      nameFilter: settings.nameFilter || 'MENU', fileId: settings.fileId, ...payload }) });
+      nameFilter: settings.nameFilter || 'MENU', fileId: settings.fileId, today: todayIso(), ...payload }) });
   } catch { throw new Error("couldn't reach Google. Check you're online and the web app URL is right."); }
   let data;
   try { data = await res.json(); }
@@ -1296,15 +1321,8 @@ async function loadConfig(quiet) {
   if (!sheetConnected() || loadingCfg) return;
   loadingCfg = true; renderFile();
   try {
-    let d = await sheetPost({ action: 'config' });
-    // a delivery sheet created since last time (the next day's copy) becomes the one we send to
-    const known = new Set(((remote && remote.files) || []).map(f => f.id));
-    if (known.size && d.files[0] && !known.has(d.files[0].id) && d.fileId !== d.files[0].id) {
-      settings.fileId = d.files[0].id;
-      d = await sheetPost({ action: 'config' });
-      if (quiet) toast(`New delivery sheet found: sending to ${d.fileName}`);
-    }
-    remote = { files: d.files, fileId: d.fileId, fileName: d.fileName, menu: d.menu, shops: d.shops, existing: d.existing, at: Date.now() };
+    const d = await sheetPost({ action: 'config', fileId: pickedFileId });
+    remote = { files: d.files, fileId: d.fileId, nextId: d.nextId, today: d.today, fileName: d.fileName, menu: d.menu, shops: d.shops, existing: d.existing, at: Date.now() };
     settings.fileId = d.fileId; store.set('settings', settings); store.set('remote', remote);
     loadingCfg = false; applyRemote();
     return d;
@@ -1319,16 +1337,19 @@ function renderFile() {
   card.hidden = !sheetConnected();
   if (card.hidden) return;
   const files = (remote && remote.files) || [];
-  $('#fileSel').innerHTML = files.length ? files.map(f => `<option value="${esc(f.id)}"${f.id === settings.fileId ? ' selected' : ''}>${esc(f.name)}</option>`).join('') : '<option>Loading…</option>';
+  const label = f => f.name + (remote && f.id === remote.nextId ? '  · next delivery' : remote && f.key && f.key < remote.today ? '  · past' : '');
+  $('#fileSel').innerHTML = files.length ? files.map(f => `<option value="${esc(f.id)}"${f.id === settings.fileId ? ' selected' : ''}>${esc(label(f))}</option>`).join('') : '<option>Loading…</option>';
   $('#refreshCfg').disabled = loadingCfg;
   $('#refreshCfg').textContent = loadingCfg ? 'Loading…' : 'Refresh';
   if (!remote) { $('#fileInfo').textContent = 'Loading your delivery sheets…'; return; }
   const nProducts = Object.values(remote.menu || {}).reduce((a, l) => a + l.length, 0);
   const ex = remote.existing || [], standing = ex.filter(e => e.standing).length;
-  $('#fileInfo').textContent = `Orders go into its "${settings.sheetTab || 'Incoming Orders'}" tab. Menu: ${nProducts} products. Shops: ${(remote.shops || []).length}. Already on this sheet: ${ex.length} shop${ex.length === 1 ? '' : 's'}${standing ? ` (${standing} standing order${standing === 1 ? '' : 's'})` : ''}.`;
+  const cur = files.find(f => f.id === settings.fileId);
+  const past = cur && cur.key && cur.key < remote.today;
+  $('#fileInfo').innerHTML = (past ? '<span class="tag bad">This delivery date has passed</span> ' : '') + esc(`Orders go into its "${settings.sheetTab || 'Incoming Orders'}" tab. Menu: ${nProducts} products. Shops: ${(remote.shops || []).length}. Already on this sheet: ${ex.length} shop${ex.length === 1 ? '' : 's'}${standing ? ` (${standing} standing order${standing === 1 ? '' : 's'})` : ''}.`);
 }
 $('#fileSel').onchange = async () => {
-  settings.fileId = $('#fileSel').value; store.set('settings', settings);
+  pickedFileId = settings.fileId = $('#fileSel').value; store.set('settings', settings);
   try { const d = await loadConfig(); toast(`Sending to ${d.fileName}`); } catch (err) { toast(`Couldn't open that sheet: ${err.message}`); }
 };
 $('#refreshCfg').onclick = async () => {
@@ -1341,6 +1362,10 @@ async function sendUnsent() {
   const todo = orders.map((o, i) => ({ o, i })).filter(x => !x.o.sent);
   if (!todo.length) return toast('Everything is already in Google Sheets');
   if (sending) return;
+  // make sure the default still points at the next delivery (the app may have been open since yesterday)
+  if (!pickedFileId) await loadConfig(true);
+  if (!remote || !remote.fileName) return toast("Couldn't reach Google Sheets. Check you're online and try again.");
+  if (!(await ask(`Send ${todo.length} order${todo.length === 1 ? '' : 's'} to:`, 'Send', remote.fileName))) return;
   sending = true; renderSendBar();
   try {
     const data = await sheetPost({ orders: todo.map(({ o, i }) => ({ id: o.id, shop: o.shop, rows: orderRows(o, i).map(r => ({ type: r.type, cells: r.cells, hcat: r.hcat })) })) });
