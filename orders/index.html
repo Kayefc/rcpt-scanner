@@ -211,9 +211,9 @@
   .toast {
     position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%) translateY(120px);
     background: #000; color: #fff; padding: 12px 20px; border-radius: 10px; font-weight: 600;
-    transition: transform .2s; z-index: 50; max-width: calc(100% - 32px); text-align: center;
+    transition: transform .2s, visibility .2s; z-index: 50; max-width: calc(100% - 32px); text-align: center; visibility: hidden;
   }
-  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.show { transform: translateX(-50%) translateY(0); visibility: visible; }
   @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
 
   .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
@@ -353,9 +353,9 @@
       </div>
       <div id="gsSetup">
         <ol class="steps">
-          <li>Go to <b>script.google.com</b> and click <b>New project</b>. Delete what's in the editor, paste the script, and click Save. <button class="btn small" id="copyScript">Copy script</button></li>
-          <li>Click <b>Deploy → New deployment</b>. Choose type <b>Web app</b>, set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>, then click <b>Deploy</b>. Allow access when Google asks: the script needs your Drive to find each day's order sheet.</li>
-          <li>Paste the <b>Web app URL</b> below, add the link to your master database, and click <b>Connect</b>.</li>
+          <li><div>Go to <b>script.google.com</b> and click <b>New project</b>. Delete what's in the editor, paste the script, and click Save. <button class="btn small" id="copyScript">Copy script</button></div></li>
+          <li><div>Click <b>Deploy → New deployment</b>. Choose type <b>Web app</b>, set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>, then click <b>Deploy</b>. Allow access when Google asks: the script needs your Drive to find each day's order sheet.</div></li>
+          <li><div>Paste the <b>Web app URL</b> below, add the link to your master database, and click <b>Connect</b>.</div></li>
         </ol>
         <div class="hint" style="margin:-4px 0 14px">This is set up once. Each new delivery sheet you copy is found automatically. "Anyone" lets the app reach the script without a Google sign-in; the script only accepts requests carrying this app's private key, which is built into the script you copy.</div>
       </div>
