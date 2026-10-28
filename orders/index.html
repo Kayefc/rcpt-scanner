@@ -187,6 +187,10 @@
   .modal-box { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; max-width: 380px; width: 100%; }
   .modal-box p { line-height: 1.45; }
   .btn:focus-visible, nav button:focus-visible, .x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  ol.steps { padding-left: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.45; margin-bottom: 14px; }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .check { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .check input { width: 18px; height: 18px; }
   .editing-banner { background: var(--warn-bg); color: var(--warn); padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; display: none; }
   .editing-banner.show { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
 </style>
@@ -252,12 +256,13 @@
     <div class="card">
       <div class="row">
         <div class="grow">
-          <b>Ready to paste</b>
-          <div class="hint">Copy, click the cell in your Google Sheet where shop no.1 goes (column A), and paste. Values only, so your sheet's colours stay put.</div>
+          <b>Ready to send</b>
+          <div class="hint" id="sendHint"></div>
         </div>
       </div>
       <div class="actions" style="justify-content:flex-start">
-        <button class="btn primary" id="copyAll">Copy all</button>
+        <button class="btn primary" id="sendSheet">Send to Google Sheet</button>
+        <button class="btn" id="copyAll">Copy all</button>
         <button class="btn" id="downloadCsv">Download CSV</button>
         <span class="grow"></span>
         <button class="btn danger" id="clearAll">Clear all orders</button>
@@ -287,6 +292,35 @@
       <label class="lbl" for="spacer">Blank rows between shops</label>
       <input type="number" id="spacer" min="0" max="20" style="max-width:120px">
       <div class="hint">Added after each shop's block when copying.</div>
+    </div>
+    <div class="card" id="gsCard">
+      <div class="row" style="margin-bottom:10px">
+        <label class="lbl grow" style="margin:0">Google Sheet</label>
+        <span id="gsTag"></span>
+      </div>
+      <div id="gsSetup">
+        <ol class="steps">
+          <li>Open the Google Sheet you want orders sent to. Your main sheet is fine: orders go into their own tab.</li>
+          <li>Go to <b>Extensions → Apps Script</b>, delete what's in the editor, paste the script, and click Save. <button class="btn small" id="copyScript">Copy script</button></li>
+          <li>Click <b>Deploy → New deployment</b>. Choose type <b>Web app</b>, set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>, then click <b>Deploy</b> and allow access when Google asks.</li>
+          <li>Copy the <b>Web app URL</b> and paste it below, then click <b>Test connection</b>.</li>
+        </ol>
+        <div class="hint" style="margin:-4px 0 14px">"Anyone" lets the app reach the script without a Google sign-in. The script only accepts orders that carry this app's private key, which is built into the script you copy.</div>
+      </div>
+      <div class="field">
+        <label class="lbl" for="gsUrl" style="margin:0">Web app URL</label>
+        <input type="text" id="gsUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label class="lbl" for="gsTab" style="margin:0">Tab name</label>
+        <input type="text" id="gsTab" placeholder="Order Intake">
+      </div>
+      <label class="check"><input type="checkbox" id="gsAuto"> Send each order automatically when I approve it</label>
+      <div class="actions">
+        <button class="btn" id="gsLink" hidden>Copy link for another device</button>
+        <button class="btn danger" id="gsDisconnect" hidden>Disconnect</button>
+        <button class="btn primary" id="gsTest">Test connection</button>
+      </div>
     </div>
     <div class="card">
       <label class="lbl">Menu (one product per line, spelled exactly as in your sheet)</label>
@@ -319,6 +353,115 @@
   </div>
 </div>
 
+<script type="text/plain" id="gasSource">
+// Order Intake → Google Sheet
+// Paste this into Extensions → Apps Script of the spreadsheet orders should go to,
+// then Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone).
+const KEY = '__KEY__';
+const WIDTH = 11;  // columns A–K hold the order
+const ID_COL = 13; // column M holds each shop block's id so resent orders replace their old block
+
+function doPost(e) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const req = JSON.parse(e.postData.contents);
+    if (req.key !== KEY) return reply({ ok: false, error: 'This script belongs to a different copy of the app. Copy the script from the app again.' });
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const tab = req.tab || 'Order Intake';
+    const sh = ss.getSheetByName(tab) || ss.insertSheet(tab);
+    const spacer = Math.max(0, Number(req.spacer) || 0);
+    if (req.action === 'ping') return reply({ ok: true, spreadsheet: ss.getName(), tab: sh.getName() });
+    if (req.action === 'delete') {
+      (req.ids || []).forEach(function (id) { removeBlock(sh, id); });
+      renumber(sh);
+      return reply({ ok: true });
+    }
+    const sent = [];
+    (req.orders || []).forEach(function (o) { upsert(sh, o, spacer); sent.push(o.id); });
+    renumber(sh);
+    return reply({ ok: true, sent: sent });
+  } catch (err) {
+    return reply({ ok: false, error: String(err) });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function doGet() {
+  return reply({ ok: true, message: 'Order Intake script is running. Send orders from the app.' });
+}
+
+function reply(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// Shop blocks, top to bottom. A block runs from its shop row to the row before the next one.
+function blocks(sh) {
+  const last = sh.getLastRow();
+  if (!last) return [];
+  const ids = sh.getRange(1, ID_COL, last, 1).getValues();
+  const starts = [];
+  ids.forEach(function (r, i) {
+    const m = /^order:(.+)$/.exec(String(r[0]));
+    if (m) starts.push({ id: m[1], row: i + 1 });
+  });
+  return starts.map(function (s, i) {
+    const isLast = i + 1 === starts.length;
+    return { id: s.id, row: s.row, end: isLast ? last : starts[i + 1].row - 1, last: isLast };
+  });
+}
+
+function upsert(sh, o, spacer) {
+  const rows = o.rows.map(function (r) {
+    const a = r.slice(0, WIDTH);
+    while (a.length < WIDTH) a.push('');
+    return a;
+  });
+  const b = blocks(sh).filter(function (x) { return x.id === o.id; })[0];
+  if (b) {
+    const data = b.last ? rows : rows.concat(blankRows(spacer));
+    sh.insertRowsBefore(b.row, data.length);
+    sh.deleteRows(b.row + data.length, b.end - b.row + 1);
+    write(sh, b.row, data, o.id);
+  } else {
+    const last = sh.getLastRow();
+    const start = last ? last + 1 + spacer : 1;
+    const need = start + rows.length - 1 - sh.getMaxRows();
+    if (need > 0) sh.insertRowsAfter(sh.getMaxRows(), need);
+    write(sh, start, rows, o.id);
+  }
+}
+
+function write(sh, start, data, id) {
+  const values = data.map(function (r, i) {
+    const row = r.map(function (v) { return v !== '' && !isNaN(v) ? Number(v) : v; });
+    row.push('', i === 0 ? 'order:' + id : '');
+    return row;
+  });
+  sh.getRange(start, 1, values.length, ID_COL).setValues(values).setFontWeight('normal');
+  sh.getRange(start, 1, 1, 2).setFontWeight('bold');
+  sh.getRange(start, ID_COL, values.length, 1).setFontColor('#bbbbbb');
+}
+
+function blankRows(n) {
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(new Array(WIDTH).fill(''));
+  return out;
+}
+
+function removeBlock(sh, id) {
+  const b = blocks(sh).filter(function (x) { return x.id === id; })[0];
+  if (!b) return;
+  const len = b.end - b.row + 1;
+  if (len >= sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), 1);
+  sh.deleteRows(b.row, len);
+}
+
+function renumber(sh) {
+  blocks(sh).forEach(function (b, i) { sh.getRange(b.row, 1).setValue(i + 1); });
+}
+</script>
 <script>
 // ─────────────────────────── Data ───────────────────────────
 const CATS = [
@@ -353,7 +496,14 @@ let shops    = store.get('shops', DEFAULT_SHOPS);
 let orders   = store.get('orders', []);           // [{shop, items:[{name, cat, qty}]}]
 let learned  = store.get('learned', {});          // normalised line → product name
 let learnedShops = store.get('learnedShops', {}); // normalised sender → shop
-let settings = store.get('settings', { spacer: 0 });
+let settings = { spacer: 0, sheetUrl: '', sheetTab: 'Order Intake', sheetKey: '', autoSend: false, ...store.get('settings', {}) };
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+if (!settings.sheetKey) {
+  const b = new Uint8Array(12); crypto.getRandomValues(b);
+  settings.sheetKey = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+  store.set('settings', settings);
+}
+orders.forEach(o => { if (!o.id) o.id = newId(); });
 let draft    = store.get('draft', { paste: '', shop: '', items: [], ignored: [], editing: null });
 
 // ─────────────────────────── Fuzzy matching ───────────────────────────
@@ -708,20 +858,21 @@ $('#approve').onclick = () => {
     const ex = merged.find(m => m.name === it.name);
     if (ex) ex.qty += it.qty; else merged.push({ name: it.name, cat: findProduct(it.name).cat, qty: it.qty });
   });
-  const order = { shop, items: merged, src: draft.paste };
+  const order = { id: draft.editing ? draft.editing.order.id : newId(), shop, items: merged, src: draft.paste, sent: false };
   if (draft.editing != null) orders.splice(Math.min(draft.editing.index, orders.length), 0, order);
   else orders.push(order);
   store.set('orders', orders);
   const wasEdit = draft.editing != null;
   resetDraft(); renderSheet();
   toast(`${shop} ${wasEdit ? 'updated' : 'added'} (${orders.length} shop${orders.length === 1 ? '' : 's'} in the sheet)`);
+  if (settings.autoSend && sheetConnected()) sendUnsent();
 };
 
 // ─────────────────────────── Compiled sheet ───────────────────────────
-function buildRows() {
-  // each row: array of 11 cells (A–K) + meta for preview colouring
+// one shop's block: shop row, then item rows; each row has 11 cells (A–K) + meta for preview colouring
+function orderRows(o, n) {
   const rows = [];
-  orders.forEach((o, n) => {
+  {
     rows.push({ type: 'shop', cells: [String(n + 1), o.shop, '', '', '', '', '', '', '', '', ''] });
     const groups = [[], [], [], [], []];
     // brownies before blondies in column H, everything else in order received
@@ -740,6 +891,13 @@ function buildRows() {
       });
       rows.push({ type: 'item', cells, hcat });
     }
+  }
+  return rows;
+}
+function buildRows() {
+  const rows = [];
+  orders.forEach((o, n) => {
+    rows.push(...orderRows(o, n));
     for (let s = 0; s < (settings.spacer || 0); s++) rows.push({ type: 'blank', cells: new Array(11).fill('') });
   });
   return rows;
@@ -768,11 +926,13 @@ function renderSheet() {
     const total = o.items.reduce((a, b) => a + b.qty, 0);
     return `<div class="order-row"><span class="n">${i + 1}</span>
       <span class="nm">${esc(o.shop)}<small>${o.items.length} line${o.items.length === 1 ? '' : 's'}, ${total} item${total === 1 ? '' : 's'}</small></span>
+      ${sheetConnected() ? (o.sent ? '<span class="tag good">Sent</span>' : '<span class="tag warn">Not sent</span>') : ''}
       <button class="btn small" data-up="${i}" ${i === 0 ? 'disabled' : ''} title="Move up">↑</button>
       <button class="btn small" data-copy="${i}">Copy</button>
       <button class="btn small" data-edit="${i}">Edit</button>
       <button class="btn small danger" data-del="${i}">Delete</button></div>`;
   }).join('') : '<div class="empty">Approved orders appear here.</div>';
+  renderSendBar();
   renderTotals();
 }
 
@@ -799,15 +959,20 @@ $('#downloadCsv').onclick = () => {
 };
 $('#clearAll').onclick = async () => {
   if (!orders.length) return;
-  if (!(await ask(`Clear all ${orders.length} orders? Do this after you've pasted them into Google Sheets.`, 'Clear all'))) return;
+  if (!(await ask(`Clear all ${orders.length} orders from this device? Do this once they're in Google Sheets. Your Google Sheet isn't changed.`, 'Clear all'))) return;
   orders = []; store.set('orders', orders); renderSheet(); toast('Cleared');
 };
 $('#ordersList').addEventListener('click', async e => {
   const d = e.target.dataset;
   if (d.del != null) {
     const o = orders[+d.del];
-    if (!(await ask(`Delete ${o.shop}'s order?`, 'Delete'))) return;
+    const inSheet = o.sent && sheetConnected();
+    if (!(await ask(`Delete ${o.shop}'s order?${inSheet ? ' It will also be removed from your Google Sheet.' : ''}`, 'Delete'))) return;
     orders.splice(+d.del, 1); store.set('orders', orders); renderSheet();
+    if (inSheet) {
+      try { await sheetPost({ action: 'delete', ids: [o.id] }); toast(`Deleted ${o.shop} here and in Google Sheets`); }
+      catch (err) { toast(`Deleted here, but not in Google Sheets: ${err.message}`); }
+    }
   } else if (d.up != null) {
     const i = +d.up; [orders[i - 1], orders[i]] = [orders[i], orders[i - 1]]; store.set('orders', orders); renderSheet();
   } else if (d.copy != null) {
@@ -829,6 +994,97 @@ $('#ordersList').addEventListener('click', async e => {
   }
 });
 
+// ─────────────────────────── Google Sheet ───────────────────────────
+const sheetConnected = () => /^https:\/\/script\.google(usercontent)?\.com\//.test(settings.sheetUrl || '');
+async function sheetPost(payload) {
+  let res;
+  try {
+    // text/plain body keeps this a "simple" request, which Apps Script web apps accept cross-origin
+    res = await fetch(settings.sheetUrl, { method: 'POST', body: JSON.stringify({ key: settings.sheetKey, tab: settings.sheetTab || 'Order Intake', spacer: settings.spacer || 0, ...payload }) });
+  } catch { throw new Error("couldn't reach Google. Check you're online and the web app URL is right."); }
+  let data;
+  try { data = await res.json(); }
+  catch { throw new Error('Google sent back a sign-in page. In the Apps Script deployment, set "Who has access" to Anyone.'); }
+  if (!data.ok) throw new Error(data.error || 'the sheet refused the orders.');
+  return data;
+}
+let sending = false;
+async function sendUnsent() {
+  if (!sheetConnected()) { toast('Connect your Google Sheet in Settings first'); showTab('settings'); return; }
+  const todo = orders.map((o, i) => ({ o, i })).filter(x => !x.o.sent);
+  if (!todo.length) return toast('Everything is already in Google Sheets');
+  if (sending) return;
+  sending = true; renderSendBar();
+  try {
+    const data = await sheetPost({ orders: todo.map(({ o, i }) => ({ id: o.id, shop: o.shop, rows: orderRows(o, i).map(r => r.cells) })) });
+    const ok = new Set(data.sent || []);
+    orders.forEach(o => { if (ok.has(o.id)) o.sent = true; });
+    store.set('orders', orders);
+    toast(`Sent ${ok.size} order${ok.size === 1 ? '' : 's'} to "${settings.sheetTab || 'Order Intake'}"`);
+  } catch (err) {
+    toast(`Not sent: ${err.message}`);
+  } finally {
+    sending = false; renderSheet();
+  }
+}
+function renderSendBar() {
+  const unsent = orders.filter(o => !o.sent).length;
+  const btn = $('#sendSheet');
+  btn.disabled = sending || (sheetConnected() && !unsent);
+  btn.textContent = sending ? 'Sending…' : !sheetConnected() ? 'Send to Google Sheet' : unsent ? `Send ${unsent} to Google Sheet` : 'All sent';
+  $('#sendHint').textContent = sheetConnected()
+    ? `Sends new and edited orders to the "${settings.sheetTab || 'Order Intake'}" tab. Edited orders replace their old rows. You can also copy and paste the rows yourself.`
+    : 'Connect your Google Sheet in Settings to send orders straight to it, or copy the rows, click column A where shop no.1 goes in your sheet, and paste. Values only, so your colours stay put.';
+}
+$('#sendSheet').onclick = sendUnsent;
+
+function renderSheetSettings() {
+  $('#gsUrl').value = settings.sheetUrl || '';
+  $('#gsTab').value = settings.sheetTab || 'Order Intake';
+  $('#gsAuto').checked = !!settings.autoSend;
+  const on = sheetConnected();
+  $('#gsTag').innerHTML = on ? '<span class="tag good">Connected</span>' : '<span class="tag warn">Not connected</span>';
+  $('#gsDisconnect').hidden = $('#gsLink').hidden = !on;
+}
+$('#copyScript').onclick = () => copyText($('#gasSource').textContent.trim().replace('__KEY__', settings.sheetKey) + '\n', 'Script copied, paste it into Apps Script');
+$('#gsTab').onchange = () => { settings.sheetTab = $('#gsTab').value.trim() || 'Order Intake'; store.set('settings', settings); renderSheet(); };
+$('#gsAuto').onchange = () => { settings.autoSend = $('#gsAuto').checked; store.set('settings', settings); };
+$('#gsTest').onclick = async () => {
+  const url = $('#gsUrl').value.trim();
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec/.test(url)) return toast('Paste the Web app URL. It starts with https://script.google.com/macros/s/ and ends in /exec');
+  const prev = settings.sheetUrl;
+  settings.sheetUrl = url; settings.sheetTab = $('#gsTab').value.trim() || 'Order Intake';
+  $('#gsTest').disabled = true; $('#gsTest').textContent = 'Testing…';
+  try {
+    const d = await sheetPost({ action: 'ping' });
+    store.set('settings', settings);
+    toast(`Connected to "${d.spreadsheet}", tab "${d.tab}"`);
+  } catch (err) {
+    settings.sheetUrl = prev;
+    toast(`Not connected: ${err.message}`);
+  }
+  $('#gsTest').disabled = false; $('#gsTest').textContent = 'Test connection';
+  renderSheetSettings(); renderSheet();
+};
+$('#gsDisconnect').onclick = async () => {
+  if (!(await ask('Disconnect from Google Sheets? Orders already sent stay in the sheet.', 'Disconnect'))) return;
+  settings.sheetUrl = ''; store.set('settings', settings); renderSheetSettings(); renderSheet();
+};
+// a link that sets up another device (phone ↔ desktop) with the same sheet and key
+$('#gsLink').onclick = () => {
+  const code = btoa(JSON.stringify({ u: settings.sheetUrl, k: settings.sheetKey, t: settings.sheetTab }));
+  copyText(location.href.split('#')[0] + '#connect=' + code, 'Link copied. Open it on your other device.');
+};
+function applyConnectLink() {
+  const m = location.hash.match(/^#connect=(.+)$/);
+  if (!m) return;
+  try {
+    const c = JSON.parse(atob(m[1]));
+    if (c.u && c.k) { settings.sheetUrl = c.u; settings.sheetKey = c.k; settings.sheetTab = c.t || 'Order Intake'; store.set('settings', settings); toast('Connected to your Google Sheet'); }
+  } catch { toast("That connect link didn't work. Copy it again from your other device."); }
+  history.replaceState(null, '', location.pathname + location.search);
+}
+
 // ─────────────────────────── Totals ───────────────────────────
 function renderTotals() {
   const sums = {};
@@ -848,6 +1104,7 @@ function renderTotals() {
 // ─────────────────────────── Settings ───────────────────────────
 function renderSettings() {
   $('#spacer').value = settings.spacer || 0;
+  renderSheetSettings();
   $('#catalogEditors').innerHTML = CATS.map(c => `<div><label class="lbl" for="cat-${c.key}">${esc(c.label)}</label><textarea id="cat-${c.key}">${esc((catalog[c.key] || []).join('\n'))}</textarea></div>`).join('');
   $('#shopsEdit').value = shops.join('\n');
   const n = Object.keys(learned).length + Object.keys(learnedShops).length;
@@ -879,6 +1136,7 @@ function showTab(name) {
 }
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
+applyConnectLink();
 buildIndex();
 renderShopList();
 $('#paste').value = draft.paste || '';

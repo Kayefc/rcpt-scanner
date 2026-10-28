@@ -1,0 +1,9 @@
+# Netlify site for Order Intake: set the site's base directory to "orders".
+[build]
+  publish = "."
+
+# Always revalidate so phones pick up new versions straight away.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
