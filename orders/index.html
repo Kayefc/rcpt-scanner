@@ -361,6 +361,14 @@
         <label class="lbl grow" style="margin:0">Google Sheets</label>
         <span id="gsTag"></span>
       </div>
+      <div class="field" id="gsPasteBox" style="padding-bottom:16px;margin-bottom:16px;border-bottom:2px solid #000">
+        <label class="lbl" for="gsPaste" style="margin:0">Already connected on another device?</label>
+        <div class="row">
+          <input type="text" id="gsPaste" class="grow" placeholder="Paste the link from Copy link for another device" autocomplete="off" spellcheck="false">
+          <button class="btn" id="gsPasteBtn">Use link</button>
+        </div>
+        <div class="hint" style="margin:0">On the device that's already connected, go to Settings and tap <b>Copy link for another device</b>. Send it to yourself, then paste it here. Every device must use the same script and key, so don't copy the script again on this device.</div>
+      </div>
       <div id="gsSetup">
         <ol class="steps">
           <li><div>Go to <b>script.google.com</b> and click <b>New project</b>. Delete what's in the editor, paste the script, and click Save. <button class="btn small" id="copyScript">Copy script</button></div></li>
@@ -1303,6 +1311,7 @@ async function sheetPost(payload) {
   try { data = await res.json(); }
   catch { throw new Error('Google sent back a sign-in page. In the Apps Script deployment, set "Who has access" to Anyone.'); }
   if (!data.ok) {
+    if (/different copy of the app/i.test(data.error || '')) throw new Error("this device has a different key from the script. On the device that works, go to Settings → Copy link for another device, then paste that link into Settings here.");
     if (/permission|authori[sz]/i.test(data.error || '')) throw new Error('Google hasn\'t given the script access to your Drive and Sheets yet. In the Apps Script editor, click Run (with authorize selected), tick Select all when Google asks, then tap Connect again.');
     throw new Error(data.error || 'the sheet refused the request.');
   }
@@ -1400,6 +1409,7 @@ function renderSheetSettings() {
   const on = sheetConnected();
   $('#gsTag').innerHTML = on ? '<span class="tag good">Connected</span>' : '<span class="tag warn">Not connected</span>';
   $('#gsDisconnect').hidden = $('#gsLink').hidden = !on;
+  $('#gsPasteBox').hidden = on;
 }
 $('#copyScript').onclick = () => copyText($('#gasSource').textContent.trim().replace('__KEY__', settings.sheetKey) + '\n', 'Script copied, paste it into Apps Script');
 $('#gsTab').onchange = () => { settings.sheetTab = $('#gsTab').value.trim() || 'Incoming Orders'; store.set('settings', settings); renderFile(); renderSheet(); };
@@ -1433,18 +1443,32 @@ $('#gsLink').onclick = () => {
   const code = btoa(unescape(encodeURIComponent(JSON.stringify({ u: settings.sheetUrl, k: settings.sheetKey, t: settings.sheetTab, m: settings.masterUrl, f: settings.nameFilter }))));
   copyText(location.href.split('#')[0] + '#connect=' + code, 'Link copied. Open it on your other device.');
 };
+// takes the settings (script URL, key, master database) from a "Copy link for another device" link
+function useConnectCode(code) {
+  try {
+    const c = JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
+    if (!c.u || !c.k) throw new Error();
+    Object.assign(settings, { sheetUrl: c.u, sheetKey: c.k, sheetTab: c.t || 'Incoming Orders', masterUrl: c.m || '', nameFilter: c.f || 'MENU' });
+    store.set('settings', settings);
+    return true;
+  } catch { toast("That link didn't work. Copy it again on your other device, from Settings → Copy link for another device."); return false; }
+}
 function applyConnectLink() {
   const m = location.hash.match(/^#connect=(.+)$/);
   if (!m) return;
-  try {
-    const c = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
-    if (c.u && c.k) {
-      Object.assign(settings, { sheetUrl: c.u, sheetKey: c.k, sheetTab: c.t || 'Incoming Orders', masterUrl: c.m || '', nameFilter: c.f || 'MENU' });
-      store.set('settings', settings); toast('Connected to Google Sheets');
-    }
-  } catch { toast("That connect link didn't work. Copy it again from your other device."); }
+  if (useConnectCode(m[1])) toast('Connected to Google Sheets');
   history.replaceState(null, '', location.pathname + location.search);
 }
+$('#gsPasteBtn').onclick = async () => {
+  const m = $('#gsPaste').value.match(/#connect=([A-Za-z0-9+/=]+)/);
+  if (!m) return toast('Paste the whole link. It ends with #connect= followed by a long code.');
+  if (!useConnectCode(m[1])) return;
+  $('#gsPaste').value = '';
+  renderSettings();
+  try { const d = await loadConfig(); toast(`Connected. Sending to ${d.fileName}`); }
+  catch (err) { toast(`Not connected: ${err.message}`); }
+  renderSettings(); renderSheet(); renderFile();
+};
 
 // ─────────────────────────── Totals ───────────────────────────
 function renderTotals() {
