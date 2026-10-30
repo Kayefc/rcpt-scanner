@@ -111,7 +111,7 @@
   }
   label.lbl { display: block; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; color: #000; margin-bottom: 10px; }
   .field label.lbl, .row .field label.lbl { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
-  input[type=text], input[type=number], select, textarea {
+  input[type=text], input[type=number], input[type=password], select, textarea {
     width: 100%; border: 2px solid transparent; border-radius: 8px; background: var(--field);
     padding: 11px 12px; outline: none; font-weight: 500;
   }
@@ -160,12 +160,12 @@
   .item .src { grid-column: 2 / -1; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; margin-top: -4px; }
   .item .src b { font-weight: 600; color: #000; }
   .item input[type=number] { text-align: center; padding: 9px 4px; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .item select { padding: 10px 8px; font-weight: 700; }
+  .item select, .item .pick { padding-top: 10px; padding-bottom: 10px; font-weight: 700; }
   .x { border: 0; background: none; font-size: 22px; color: var(--muted); cursor: pointer; height: 32px; border-radius: 6px; }
   .x:hover { color: var(--bad); background: var(--bad-bg); }
   @media (max-width: 600px) {
     .item { grid-template-columns: 30px 1fr 64px 28px; }
-    .item select { grid-column: 2 / -1; order: 1; }
+    .item select, .item .pick { grid-column: 2 / -1; order: 1; }
     .item .bul { order: 0; }
     .item input[type=number] { grid-column: 3; order: 3; }
     .item .tag { grid-column: 2; order: 2; justify-self: start; }
@@ -173,6 +173,46 @@
     .item .src { order: 5; }
     .stat b { font-size: 38px; }
   }
+
+  /* product picker: categories fold open one at a time */
+  .pick {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer;
+    border: 2px solid transparent; border-radius: 8px; background: var(--field); padding: 10px 10px 10px 12px; font-weight: 700;
+  }
+  .pick:hover, .pick[aria-expanded="true"] { border-color: #000; background: #fff; }
+  .pick span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pick.empty span { color: var(--bad); }
+  .pick::after { content: ""; width: 8px; height: 8px; border-right: 2px solid #000; border-bottom: 2px solid #000; transform: rotate(45deg) translateY(-3px); flex-shrink: 0; }
+  .picker {
+    position: fixed; z-index: 40; background: #fff; border-radius: var(--radius); border-top: 10px solid #000;
+    box-shadow: 0 0 0 1px var(--line), 0 18px 40px rgba(0, 0, 0, .18); display: flex; flex-direction: column; overflow: hidden;
+  }
+  .picker .psearch { padding: 12px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
+  .picker .psearch input { flex: 1; min-width: 0; }
+  .picker .plist { overflow-y: auto; overscroll-behavior: contain; padding: 4px 0 8px; }
+  .pcat {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; border: 0; background: none;
+    cursor: pointer; font-weight: 700; font-size: 15px; text-align: left;
+  }
+  .pcat:hover { background: var(--field); }
+  .pcat .n { margin-left: auto; color: var(--muted); font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .pcat::after { content: ""; width: 7px; height: 7px; border-right: 2px solid #000; border-bottom: 2px solid #000; transform: rotate(-45deg); transition: transform .15s; margin-left: 4px; }
+  .pcat[aria-expanded="true"]::after { transform: rotate(45deg); }
+  .popt {
+    display: flex; align-items: center; width: 100%; padding: 9px 14px 9px 54px; border: 0; background: none;
+    cursor: pointer; text-align: left; font-size: 15px; font-weight: 500;
+  }
+  .popt:hover, .popt:focus-visible { background: var(--field); outline: none; }
+  .popt.cur { font-weight: 700; }
+  .popt.cur::after { content: "✓"; margin-left: auto; font-weight: 700; }
+  .pempty { padding: 14px; color: var(--muted); }
+  @media (max-width: 600px) {
+    .picker { left: 0 !important; right: 0; bottom: 0; top: auto !important; width: auto !important; max-height: 78vh !important; border-radius: 14px 14px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  }
+  @media (prefers-reduced-motion: reduce) { .pcat::after { transition: none; } }
+
+  .pin { letter-spacing: .5em; font-size: 20px !important; font-weight: 700 !important; text-align: center; max-width: 150px; }
+  .linkbtn { border: 0; background: none; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-weight: 600; font-size: 13px; }
 
   details.ignored { margin-top: 14px; }
   details.ignored summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; }
@@ -361,6 +401,15 @@
         <label class="lbl grow" style="margin:0">Google Sheets</label>
         <span id="gsTag"></span>
       </div>
+      <div id="gsLocked" hidden>
+        <div class="hint" style="margin:0 0 12px">These settings are locked on this device. Enter the PIN to see or change them.</div>
+        <div class="row">
+          <input type="password" id="pinIn" class="pin" inputmode="numeric" maxlength="4" autocomplete="off" aria-label="PIN">
+          <button class="btn primary" id="pinUnlock">Unlock</button>
+        </div>
+        <div class="hint"><button class="linkbtn" id="pinForgot">Forgot the PIN?</button></div>
+      </div>
+      <div id="gsOpen">
       <div class="field" id="gsPasteBox" style="padding-bottom:16px;margin-bottom:16px;border-bottom:2px solid #000">
         <label class="lbl" for="gsPaste" style="margin:0">Already connected on another device?</label>
         <div class="row">
@@ -402,6 +451,20 @@
         <button class="btn" id="gsLink" hidden>Copy link for another device</button>
         <button class="btn danger" id="gsDisconnect" hidden>Disconnect</button>
         <button class="btn primary" id="gsTest">Connect</button>
+      </div>
+      <div id="pinBox" style="margin-top:18px;padding-top:16px;border-top:2px solid #000" hidden>
+        <label class="lbl" style="margin:0 0 4px">PIN lock</label>
+        <div class="hint" id="pinStatus" style="margin:0 0 10px"></div>
+        <div class="row">
+          <input type="password" id="pinNew" class="pin" inputmode="numeric" maxlength="4" autocomplete="new-password" aria-label="New PIN" placeholder="····">
+          <input type="password" id="pinNew2" class="pin" inputmode="numeric" maxlength="4" autocomplete="new-password" aria-label="Repeat new PIN" placeholder="····">
+          <button class="btn" id="pinSet">Set PIN</button>
+        </div>
+        <div class="actions" id="pinActions" hidden>
+          <button class="btn danger" id="pinRemove">Remove PIN</button>
+          <button class="btn primary" id="pinLock">Lock now</button>
+        </div>
+      </div>
       </div>
     </div>
     <div class="card">
@@ -979,15 +1042,6 @@ function ask(msg, yes = 'OK', detail = '') {
 }
 function saveDraft() { store.set('draft', draft); }
 
-function productOptions(selected) {
-  let h = `<option value="">— Pick a product —</option>`;
-  for (const c of CATS) {
-    h += `<optgroup label="${esc(c.label)}">`;
-    for (const n of catalog[c.key] || []) h += `<option${n === selected ? ' selected' : ''}>${esc(n)}</option>`;
-    h += `</optgroup>`;
-  }
-  return h;
-}
 function confTag(it) {
   if (!it.name) return `<span class="tag bad">Not matched</span>`;
   if (it.name !== it.auto) return `<span class="tag good">Changed</span>`;
@@ -1016,7 +1070,7 @@ function renderItems() {
     const p = findProduct(it.name);
     return `<div class="item" data-i="${i}">
       ${bullet(p && p.cat)}
-      <select data-f="name" aria-label="Product">${productOptions(it.name)}</select>
+      <button type="button" class="pick${it.name ? '' : ' empty'}" data-f="pick" aria-haspopup="listbox" aria-expanded="false" aria-label="Product: ${esc(it.name || 'not picked')}"><span>${esc(it.name || 'Pick a product')}</span></button>
       <input type="number" min="0" inputmode="numeric" value="${it.qty ?? ''}" data-f="qty" aria-label="Quantity">
       ${confTag(it)}
       <button class="x" data-f="del" title="Remove">×</button>
@@ -1079,6 +1133,8 @@ $('#items').addEventListener('change', e => {
   if (e.target.dataset.f === 'name') { it.name = e.target.value; saveDraft(); renderItems(); }
 });
 $('#items').addEventListener('click', e => {
+  const pick = e.target.closest('[data-f="pick"]');
+  if (pick) { openPicker(pick, +pick.closest('.item').dataset.i); return; }
   if (e.target.dataset.f !== 'del') return;
   const i = +e.target.closest('.item').dataset.i;
   const it = draft.items.splice(i, 1)[0];
@@ -1093,7 +1149,92 @@ $('#ignored').addEventListener('click', e => {
   draft.items.push(mkItem(line, qty ?? 1, matchProduct(rest), qty == null));
   saveDraft(); renderItems();
 });
-$('#addItem').onclick = () => { draft.items.push({ src: '', qty: 1, name: '', auto: '', score: 0 }); saveDraft(); renderItems(); };
+$('#addItem').onclick = () => {
+  draft.items.push({ src: '', qty: 1, name: '', auto: '', score: 0 }); saveDraft(); renderItems();
+  const btn = $('#items').lastElementChild.querySelector('[data-f="pick"]');
+  btn.scrollIntoView({ block: 'nearest' }); openPicker(btn, draft.items.length - 1);
+};
+
+// ─────────────────────────── Product picker ───────────────────────────
+// One category open at a time (the item's own category to start with), or search across the menu.
+const picker = document.createElement('div');
+picker.className = 'picker'; picker.hidden = true; picker.setAttribute('role', 'dialog'); picker.setAttribute('aria-label', 'Choose a product');
+picker.innerHTML = '<div class="psearch"><input type="text" id="pickSearch" placeholder="Search the menu" autocomplete="off" spellcheck="false" aria-label="Search the menu"><button type="button" class="x" id="pickClose" aria-label="Close">×</button></div><div class="plist" id="pickList" role="listbox"></div>';
+document.body.appendChild(picker);
+let pk = null; // { btn, i, open: category key }
+function openPicker(btn, i) {
+  if (pk && pk.btn === btn) return closePicker();
+  closePicker();
+  const cur = findProduct(draft.items[i].name);
+  pk = { btn, i, open: cur ? cur.cat : null };
+  btn.setAttribute('aria-expanded', 'true');
+  picker.hidden = false; $('#pickSearch').value = '';
+  renderPicker(); placePicker();
+  if (matchMedia('(min-width: 601px)').matches) $('#pickSearch').focus();
+  const sel = picker.querySelector('.popt.cur'); if (sel) sel.scrollIntoView({ block: 'center' });
+}
+function closePicker() {
+  if (!pk) return;
+  pk.btn.setAttribute('aria-expanded', 'false');
+  picker.hidden = true; pk = null;
+}
+function placePicker() {
+  if (!pk) return;
+  const b = pk.btn.getBoundingClientRect(), vh = innerHeight;
+  const below = vh - b.bottom - 12, above = b.top - 70;
+  const h = Math.min(460, Math.max(below, above));
+  picker.style.width = Math.max(b.width, 320) + 'px';
+  picker.style.left = Math.min(b.left, innerWidth - Math.max(b.width, 320) - 12) + 'px';
+  picker.style.maxHeight = h + 'px';
+  picker.style.top = (below >= Math.min(300, above) ? b.bottom + 6 : Math.max(70, b.top - 6 - Math.min(h, picker.scrollHeight))) + 'px';
+}
+function renderPicker() {
+  const q = normText($('#pickSearch').value);
+  const curName = draft.items[pk.i].name;
+  const opt = n => `<button type="button" class="popt${n === curName ? ' cur' : ''}" role="option" aria-selected="${n === curName}" data-name="${esc(n)}">${esc(n)}</button>`;
+  let h = '';
+  if (q) {
+    // search: every category with a match, opened
+    for (const c of CATS) {
+      const hits = (catalog[c.key] || []).filter(n => normText(n).includes(q));
+      if (hits.length) h += `<button type="button" class="pcat" aria-expanded="true" data-cat="${c.key}">${bullet(c.key)}${esc(c.label)}<span class="n">${hits.length}</span></button>` + hits.map(opt).join('');
+    }
+    if (!h) h = '<div class="pempty">Nothing on the menu matches that.</div>';
+  } else {
+    for (const c of CATS) {
+      const list = catalog[c.key] || [];
+      if (!list.length) continue;
+      const open = pk.open === c.key;
+      h += `<button type="button" class="pcat" aria-expanded="${open}" data-cat="${c.key}">${bullet(c.key)}${esc(c.label)}<span class="n">${list.length}</span></button>`;
+      if (open) h += list.map(opt).join('');
+    }
+  }
+  $('#pickList').innerHTML = h;
+}
+$('#pickClose').onclick = () => { const b = pk && pk.btn; closePicker(); if (b) b.focus(); };
+$('#pickSearch').addEventListener('input', () => { renderPicker(); placePicker(); });
+$('#pickSearch').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { const first = picker.querySelector('.popt'); if (first) first.click(); }
+});
+$('#pickList').addEventListener('click', e => {
+  const cat = e.target.closest('.pcat');
+  if (cat) {
+    if ($('#pickSearch').value) { $('#pickSearch').value = ''; }
+    pk.open = pk.open === cat.dataset.cat ? null : cat.dataset.cat;
+    renderPicker(); placePicker();
+    const el = picker.querySelector(`.pcat[data-cat="${cat.dataset.cat}"]`); if (el) el.scrollIntoView({ block: 'nearest' });
+    return;
+  }
+  const o = e.target.closest('.popt'); if (!o) return;
+  const i = pk.i;
+  closePicker();
+  draft.items[i].name = o.dataset.name; saveDraft(); renderItems();
+  const again = $('#items').children[i]; if (again) again.querySelector('[data-f="pick"]').focus();
+});
+document.addEventListener('mousedown', e => { if (pk && !picker.contains(e.target) && !pk.btn.contains(e.target)) closePicker(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && pk) { const b = pk.btn; closePicker(); b.focus(); } });
+addEventListener('resize', placePicker);
+addEventListener('scroll', placePicker, { passive: true });
 
 function runParse() {
   const text = $('#paste').value;
@@ -1400,7 +1541,60 @@ function renderSendBar() {
 }
 $('#sendSheet').onclick = sendUnsent;
 
+// ── PIN lock: hides the connection details (script URL, master database, key) on this device
+let unlocked = false, pinFails = 0, pinWaitUntil = 0;
+const pinOn = () => !!(settings.pinHash && sheetConnected());
+async function pinHash(pin, salt) {
+  const text = salt + ':' + pin;
+  if (window.crypto && crypto.subtle) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  let h = 0; for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) | 0; return 'x' + h;
+}
+function newKey() { const b = new Uint8Array(12); crypto.getRandomValues(b); return [...b].map(x => x.toString(16).padStart(2, '0')).join(''); }
+$('#pinUnlock').onclick = async () => {
+  if (Date.now() < pinWaitUntil) return toast(`Too many tries. Wait ${Math.ceil((pinWaitUntil - Date.now()) / 1000)} seconds.`);
+  const v = $('#pinIn').value.trim();
+  if ((await pinHash(v, settings.pinSalt)) === settings.pinHash) {
+    unlocked = true; pinFails = 0; $('#pinIn').value = ''; renderSettings();
+  } else {
+    pinFails++; $('#pinIn').value = ''; $('#pinIn').focus();
+    if (pinFails >= 5) { pinWaitUntil = Date.now() + 30000; pinFails = 0; toast('Wrong PIN. Try again in 30 seconds.'); }
+    else toast('Wrong PIN');
+  }
+};
+$('#pinIn').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pinUnlock').click(); });
+$('#pinSet').onclick = async () => {
+  const a = $('#pinNew').value.trim(), b = $('#pinNew2').value.trim();
+  if (!/^\d{4}$/.test(a)) return toast('Use 4 digits for the PIN');
+  if (a !== b) return toast("The two PINs don't match");
+  settings.pinSalt = newKey(); settings.pinHash = await pinHash(a, settings.pinSalt);
+  store.set('settings', settings); $('#pinNew').value = $('#pinNew2').value = '';
+  unlocked = true; renderSettings(); toast('PIN set. Settings lock when you leave this tab.');
+};
+$('#pinRemove').onclick = async () => {
+  if (!(await ask('Remove the PIN? The Google Sheets settings will show without one on this device.', 'Remove'))) return;
+  delete settings.pinHash; delete settings.pinSalt; store.set('settings', settings); renderSettings(); toast('PIN removed');
+};
+$('#pinLock').onclick = () => { unlocked = false; renderSettings(); toast('Locked'); };
+$('#pinForgot').onclick = async () => {
+  if (!(await ask('Forgot the PIN? This disconnects Google Sheets on this device and clears its details. To reconnect, paste the link from another connected device. Orders already sent stay in the sheet.', 'Disconnect'))) return;
+  Object.assign(settings, { sheetUrl: '', masterUrl: '', sheetKey: newKey() });
+  delete settings.pinHash; delete settings.pinSalt;
+  remote = null; store.set('settings', settings); store.set('remote', null);
+  catalog = store.get('catalog', DEFAULT_CATALOG); shops = store.get('shops', DEFAULT_SHOPS);
+  buildIndex(); renderShopList(); renderSettings(); renderSheet(); renderFile(); renderItems();
+  toast('Disconnected on this device');
+};
+
 function renderSheetSettings() {
+  const locked = pinOn() && !unlocked;
+  $('#gsLocked').hidden = !locked; $('#gsOpen').hidden = locked;
+  $('#pinBox').hidden = !sheetConnected();
+  $('#pinStatus').textContent = settings.pinHash ? 'On. These settings lock whenever you leave this tab. To change the PIN, type a new one twice.' : 'Off. Set a 4-digit PIN to hide the script URL, master database link and the link for other devices on this device.';
+  $('#pinSet').textContent = settings.pinHash ? 'Change PIN' : 'Set PIN';
+  $('#pinActions').hidden = !settings.pinHash;
   $('#gsUrl').value = settings.sheetUrl || '';
   $('#gsMaster').value = settings.masterUrl || '';
   $('#gsFilter').value = settings.nameFilter || 'MENU';
@@ -1434,7 +1628,8 @@ $('#gsTest').onclick = async () => {
 };
 $('#gsDisconnect').onclick = async () => {
   if (!(await ask('Disconnect from Google Sheets? Orders already sent stay in the sheet, and the app goes back to its own menu and shop list.', 'Disconnect'))) return;
-  settings.sheetUrl = ''; remote = null; store.set('settings', settings); store.set('remote', null);
+  settings.sheetUrl = ''; delete settings.pinHash; delete settings.pinSalt;
+  remote = null; store.set('settings', settings); store.set('remote', null);
   catalog = store.get('catalog', DEFAULT_CATALOG); shops = store.get('shops', DEFAULT_SHOPS);
   buildIndex(); renderShopList(); renderSettings(); renderSheet(); renderFile(); renderItems();
 };
@@ -1521,6 +1716,8 @@ $('#clearLearned').onclick = async () => {
 
 // ─────────────────────────── Tabs & init ───────────────────────────
 function showTab(name) {
+  if (name !== 'settings') unlocked = false;
+  closePicker();
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
   if (name === 'settings') renderSettings();
