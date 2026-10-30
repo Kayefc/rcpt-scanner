@@ -211,6 +211,17 @@
   }
   @media (prefers-reduced-motion: reduce) { .pcat::after { transition: none; } }
 
+  /* voice input */
+  .mic { display: inline-flex; align-items: center; gap: 7px; }
+  .mic svg { width: 18px; height: 18px; fill: currentColor; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .mic svg path { fill: none; }
+  .mic.on { background: var(--bad); border-color: var(--bad); color: #fff; }
+  .mic.on svg { animation: pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .mic.on svg { animation: none; } }
+  .heard { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--bad-bg); color: #000; font-weight: 600; min-height: 42px; }
+  .heard:empty::before { content: "Listening… say the shop, then each quantity and product."; color: var(--muted); font-weight: 500; }
+
   .pin { letter-spacing: .5em; font-size: 20px !important; font-weight: 700 !important; text-align: center; max-width: 150px; }
   .linkbtn { border: 0; background: none; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-weight: 600; font-size: 13px; }
 
@@ -328,8 +339,10 @@
     <div class="card paste-card">
       <label class="lbl" for="paste">Paste the order (email or WhatsApp)</label>
       <textarea id="paste" placeholder="e.g.&#10;Hi! Order for Friday please:&#10;2 x carrot cake&#10;red velvet x2&#10;3 banana loaf&#10;12 white choc raspberry cookies&#10;Thanks, Kahaila"></textarea>
+      <div class="heard" id="heard" hidden aria-live="polite"></div>
       <div class="row" style="margin-top:10px">
         <button class="btn" id="clearPaste">Clear</button>
+        <button class="btn mic" id="micBtn" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" fill="none"/></svg><span>Speak</span></button>
         <span class="grow"></span>
         <button class="btn primary" id="parseBtn">Read order</button>
       </div>
@@ -985,6 +998,30 @@ function extractQty(line) {
   return { qty, rest: s.replace(/\s+/g, ' ').trim() };
 }
 
+// Dictation comes as one run-on sentence ("Kahaila two carrot cakes three banana loaves and twelve cookies").
+// Turn it into a list: number words become digits, and every quantity starts a new line.
+const SAY_NUM = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50 };
+function listify(text) {
+  let t = ' ' + text + ' ';
+  t = t.replace(/\b(?:new|next) (?:line|item)\b/gi, '\n');
+  t = t.replace(/\bhalf (?:a )?dozen\b/gi, ' 6 ').replace(/\b(?:a )?dozen\b/gi, ' 12 ').replace(/\ba (?:couple|pair) of\b/gi, ' 2 ');
+  t = t.replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)\b/gi, w => ' ' + SAY_NUM[w.toLowerCase()] + ' ');
+  t = t.replace(/\s+(?:times|x|×)\s*(\d+)/gi, ' x$1');          // "red velvet times 2" → "red velvet x2"
+  t = t.replace(/[.;,!?]+(?=\s|$)/g, '\n');                        // spoken punctuation ends an item
+  t = t.replace(/\s(?=\d+\s+[a-z])/gi, '\n');                      // a quantity followed by words starts an item
+  return t.split('\n')
+    .map(l => l.replace(/\s+/g, ' ').trim().replace(/^(?:and|then|also|plus|please)\s+/i, '').replace(/\s+(?:and|then|also|plus|please)$/i, '').trim())
+    // "6 chocolate chunk cookies red velvet x2": a second item said with its quantity after it
+    .flatMap(l => { const m = l.match(LEAD_THEN_TRAIL); return m ? [m[1], m[2]] : [l]; })
+    .filter(Boolean).join('\n');
+}
+const LEAD_THEN_TRAIL = /^(\d+\s.*?\b(?:cakes?|loaf|loaves|cookies?|brownies?|blondies?|cupcakes?|bars?|biscuits?|sponges?|flapjacks?|shortbreads?|dodgers?))\s+(?:and\s+)?(\D+?\sx\d+)$/i;
+// lines carrying two or more "quantity product" pairs are dictation: lay them out as a list
+const QTY_FIRST = /(?:^|\s)(?:\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|dozen)\s+[a-z]/gi;
+function tidyText(text) {
+  return text.split(/\r?\n/).map(line => WA_PREFIX.test(line) || (line.match(QTY_FIRST) || []).length < 2 ? line : listify(line)).join('\n');
+}
+
 function splitLines(text) {
   const out = [];
   let sender = null;
@@ -1237,6 +1274,8 @@ addEventListener('resize', placePicker);
 addEventListener('scroll', placePicker, { passive: true });
 
 function runParse() {
+  const tidy = tidyText($('#paste').value);
+  if (tidy !== $('#paste').value) $('#paste').value = tidy;
   const text = $('#paste').value;
   draft.paste = text;
   if (!text.trim()) { draft.items = []; draft.ignored = []; saveDraft(); renderItems(); return; }
@@ -1247,6 +1286,53 @@ function runParse() {
   saveDraft(); renderItems();
 }
 $('#parseBtn').onclick = runParse;
+
+// ─────────────────────────── Voice input ───────────────────────────
+// Web Speech API (Chrome, Edge, Safari). What's said is added to the paste box as a list, then read.
+const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, heardFinal = '';
+function micUi(on) {
+  $('#micBtn').classList.toggle('on', on);
+  $('#micBtn').setAttribute('aria-pressed', String(on));
+  $('#micBtn').querySelector('span').textContent = on ? 'Stop' : 'Speak';
+  $('#heard').hidden = !on;
+}
+function micFinish() {
+  const said = listify(heardFinal);
+  rec = null; heardFinal = ''; micUi(false); $('#heard').textContent = '';
+  if (!said) return;
+  const box = $('#paste');
+  box.value = (box.value.trim() ? box.value.replace(/\s+$/, '') + '\n' : '') + said;
+  runParse();
+  toast(`Added ${said.split('\n').length} line${said.split('\n').length === 1 ? '' : 's'} from your voice`);
+}
+$('#micBtn').onclick = () => {
+  if (rec) { rec.stop(); return; }
+  if (!Rec) return toast("Voice input isn't available in this browser. Use Chrome or Safari, or your keyboard's microphone.");
+  rec = new Rec();
+  rec.lang = 'en-GB'; rec.continuous = true; rec.interimResults = true;
+  heardFinal = '';
+  rec.onresult = e => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) heardFinal += ' ' + e.results[i][0].transcript;
+      else interim += ' ' + e.results[i][0].transcript;
+    }
+    $('#heard').textContent = (heardFinal + interim).trim();
+  };
+  rec.onerror = e => {
+    const msg = {
+      'not-allowed': 'Microphone access is blocked. Allow the microphone for this site in your browser settings.',
+      'service-not-allowed': "Voice input isn't available here. On iPhone it only works in Safari, not the home-screen app; your keyboard's microphone works everywhere.",
+      'no-speech': "Didn't hear anything. Tap Speak and try again.",
+      'network': 'Voice input needs an internet connection.',
+      'audio-capture': 'No microphone found.',
+    }[e.error];
+    if (msg) toast(msg);
+  };
+  rec.onend = micFinish;
+  try { rec.start(); micUi(true); } catch { rec = null; micUi(false); toast("Couldn't start the microphone. Try again."); }
+};
 $('#paste').addEventListener('paste', () => setTimeout(runParse, 0));
 $('#paste').addEventListener('input', () => { draft.paste = $('#paste').value; saveDraft(); });
 $('#shop').addEventListener('input', () => { draft.shop = $('#shop').value; saveDraft(); renderShopTag(); });
