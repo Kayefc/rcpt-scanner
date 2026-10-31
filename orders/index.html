@@ -1291,6 +1291,25 @@ $('#parseBtn').onclick = runParse;
 // Web Speech API (Chrome, Edge, Safari). What's said is added to the paste box as a list, then read.
 const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null, heardFinal = '';
+// Chrome on Android sends each final result as the whole phrase so far ("3", "3 cookie", "3 cookie dough"…),
+// sometimes revising earlier words. Keep only the latest version of a phrase instead of every step.
+const ANDROID = /Android/i.test(navigator.userAgent);
+function mergeSpeech(finals, cumulative = ANDROID) {
+  const norm = t => t.toLowerCase().replace(/(\d)\s*(?:x|×|times)\b/g, '$1').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const out = [];
+  for (const raw of finals) {
+    const t = raw.trim(); if (!t) continue;
+    const prev = out[out.length - 1];
+    if (prev && cumulative) {
+      const a = norm(prev), b = norm(t);
+      let k = 0; while (k < a.length && k < b.length && a[k] === b[k]) k++;
+      if (b.startsWith(a) || k >= Math.max(1, a.length * 0.6)) { if (b.length >= a.length) out[out.length - 1] = t; continue; }
+      if (a.startsWith(b)) continue;
+    }
+    out.push(t);
+  }
+  return out.join(' ');
+}
 function micUi(on) {
   $('#micBtn').classList.toggle('on', on);
   $('#micBtn').setAttribute('aria-pressed', String(on));
@@ -1313,12 +1332,15 @@ $('#micBtn').onclick = () => {
   rec.lang = 'en-GB'; rec.continuous = true; rec.interimResults = true;
   heardFinal = '';
   rec.onresult = e => {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) heardFinal += ' ' + e.results[i][0].transcript;
+    // rebuilt from every result each time, so nothing is added twice
+    const finals = []; let interim = '';
+    for (let i = 0; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finals.push(e.results[i][0].transcript);
       else interim += ' ' + e.results[i][0].transcript;
     }
-    $('#heard').textContent = (heardFinal + interim).trim();
+    heardFinal = mergeSpeech(finals);
+    const shown = ANDROID && interim.trim() ? mergeSpeech([heardFinal, interim]) : (heardFinal + ' ' + interim);
+    $('#heard').textContent = shown.trim();
   };
   rec.onerror = e => {
     const msg = {

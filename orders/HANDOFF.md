@@ -88,5 +88,6 @@ The user moves rows across by copying Incoming Orders columns **A–L** into Sho
 
 - Rebuild the zip after changes: `cd orders && zip ../order-intake-site.zip index.html manifest.json netlify.toml`.
 - Changes to the embedded Apps Script also need the owner to: Copy script **on a device that already has the shared key**, paste it into Apps Script, then Deploy → Manage deployments → edit → New version.
-- Test harness: the earlier Playwright tests (a mocked SpreadsheetApp/DriveApp built from the owner's real xlsx files, parsing, voice and picker tests) lived in a temporary folder that no longer exists. Rebuild them if needed. Chromium has native `SpeechRecognition`, so fake both it and `webkitSpeechRecognition` in tests.
+- Voice test: `node tests/order-intake/voice.test.js` (fake speech engine; covers Chrome on Android sending each final result as the whole phrase so far, which `mergeSpeech` collapses).
+- Older test harness: the earlier Playwright tests (a mocked SpreadsheetApp/DriveApp built from the owner's real xlsx files, parsing, voice and picker tests) lived in a temporary folder that no longer exists. Rebuild them if needed. Chromium has native `SpeechRecognition`, so fake both it and `webkitSpeechRecognition` in tests.
 - In the claude.ai preview, `confirm()` / `prompt()` don't work. The app uses its own `ask()` dialog everywhere.
