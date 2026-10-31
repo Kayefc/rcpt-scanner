@@ -220,7 +220,7 @@
   @keyframes pulse { 50% { opacity: .35; } }
   @media (prefers-reduced-motion: reduce) { .mic.on svg { animation: none; } }
   .heard { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--bad-bg); color: #000; font-weight: 600; min-height: 42px; }
-  .heard:empty::before { content: "Listening… say the shop, then each quantity and product."; color: var(--muted); font-weight: 500; }
+  .heard:empty::before { content: "Listening… say the shop, then each quantity and product. Take your time, and tap Stop when you're done."; color: var(--muted); font-weight: 500; }
 
   .pin { letter-spacing: .5em; font-size: 20px !important; font-weight: 700 !important; text-align: center; max-width: 150px; }
   .linkbtn { border: 0; background: none; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-weight: 600; font-size: 13px; }
@@ -1008,7 +1008,7 @@ function listify(text) {
   t = t.replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)\b/gi, w => ' ' + SAY_NUM[w.toLowerCase()] + ' ');
   t = t.replace(/\s+(?:times|x|×)\s*(\d+)/gi, ' x$1');          // "red velvet times 2" → "red velvet x2"
   t = t.replace(/[.;,!?]+(?=\s|$)/g, '\n');                        // spoken punctuation ends an item
-  t = t.replace(/\s(?=\d+\s+[a-z])/gi, '\n');                      // a quantity followed by words starts an item
+  t = t.replace(/\s(?=\d+\s*(?:x|×)?\s+[a-z])/gi, '\n');           // a quantity ("3" or "3x") followed by words starts an item
   return t.split('\n')
     .map(l => l.replace(/\s+/g, ' ').trim().replace(/^(?:and|then|also|plus|please)\s+/i, '').replace(/\s+(?:and|then|also|plus|please)$/i, '').trim())
     // "6 chocolate chunk cookies red velvet x2": a second item said with its quantity after it
@@ -1316,18 +1316,27 @@ function micUi(on) {
   $('#micBtn').querySelector('span').textContent = on ? 'Stop' : 'Speak';
   $('#heard').hidden = !on;
 }
+// Phones (Chrome on Android especially) switch the microphone off after a few seconds of silence.
+// While the button says Stop, each time that happens a new listening session starts and the text so far is kept.
+const MIC_IDLE_MS = 60000;           // give up after a minute with nothing new heard
+let listening = false, committed = '', lastHeard = 0;
+const joinSaid = (a, b) => [a, b].map(t => (t || '').trim()).filter(Boolean).join(' ');
 function micFinish() {
-  const said = listify(heardFinal);
-  rec = null; heardFinal = ''; micUi(false); $('#heard').textContent = '';
+  const said = listify(committed);
+  rec = null; listening = false; committed = ''; heardFinal = ''; micUi(false); $('#heard').textContent = '';
   if (!said) return;
   const box = $('#paste');
   box.value = (box.value.trim() ? box.value.replace(/\s+$/, '') + '\n' : '') + said;
   runParse();
   toast(`Added ${said.split('\n').length} line${said.split('\n').length === 1 ? '' : 's'} from your voice`);
 }
-$('#micBtn').onclick = () => {
-  if (rec) { rec.stop(); return; }
-  if (!Rec) return toast("Voice input isn't available in this browser. Use Chrome or Safari, or your keyboard's microphone.");
+const MIC_FATAL = {
+  'not-allowed': 'Microphone access is blocked. Allow the microphone for this site in your browser settings.',
+  'service-not-allowed': "Voice input isn't available here. On iPhone it only works in Safari, not the home-screen app; your keyboard's microphone works everywhere.",
+  'network': 'Voice input needs an internet connection.',
+  'audio-capture': 'No microphone found.',
+};
+function micSession() {
   rec = new Rec();
   rec.lang = 'en-GB'; rec.continuous = true; rec.interimResults = true;
   heardFinal = '';
@@ -1339,21 +1348,29 @@ $('#micBtn').onclick = () => {
       else interim += ' ' + e.results[i][0].transcript;
     }
     heardFinal = mergeSpeech(finals);
-    const shown = ANDROID && interim.trim() ? mergeSpeech([heardFinal, interim]) : (heardFinal + ' ' + interim);
-    $('#heard').textContent = shown.trim();
+    lastHeard = Date.now();
+    const live = ANDROID && interim.trim() ? mergeSpeech([heardFinal, interim]) : joinSaid(heardFinal, interim);
+    $('#heard').textContent = joinSaid(committed, live);
   };
   rec.onerror = e => {
-    const msg = {
-      'not-allowed': 'Microphone access is blocked. Allow the microphone for this site in your browser settings.',
-      'service-not-allowed': "Voice input isn't available here. On iPhone it only works in Safari, not the home-screen app; your keyboard's microphone works everywhere.",
-      'no-speech': "Didn't hear anything. Tap Speak and try again.",
-      'network': 'Voice input needs an internet connection.',
-      'audio-capture': 'No microphone found.',
-    }[e.error];
-    if (msg) toast(msg);
+    // "no-speech" and "aborted" just end this session; listening carries on
+    if (MIC_FATAL[e.error]) { listening = false; toast(MIC_FATAL[e.error]); }
   };
-  rec.onend = micFinish;
-  try { rec.start(); micUi(true); } catch { rec = null; micUi(false); toast("Couldn't start the microphone. Try again."); }
+  rec.onend = () => {
+    committed = joinSaid(committed, heardFinal); heardFinal = '';
+    if (listening && Date.now() - lastHeard < MIC_IDLE_MS) {
+      try { micSession(); return; } catch { /* fall through and finish */ }
+    } else if (listening) toast('Stopped listening after a minute of quiet');
+    micFinish();
+  };
+  rec.start();
+}
+$('#micBtn').onclick = () => {
+  if (listening) { listening = false; if (rec) rec.stop(); else micFinish(); return; }
+  if (!Rec) return toast("Voice input isn't available in this browser. Use Chrome or Safari, or your keyboard's microphone.");
+  listening = true; committed = ''; lastHeard = Date.now();
+  try { micSession(); micUi(true); }
+  catch { listening = false; rec = null; micUi(false); toast("Couldn't start the microphone. Try again."); }
 };
 $('#paste').addEventListener('paste', () => setTimeout(runParse, 0));
 $('#paste').addEventListener('input', () => { draft.paste = $('#paste').value; saveDraft(); });

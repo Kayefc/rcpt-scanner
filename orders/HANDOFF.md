@@ -54,7 +54,7 @@ The user moves rows across by copying Incoming Orders columns **A–L** into Sho
 - **Shop** must be on the master list. Near misses get suggestions ("Apple Tree 01" → "Apple Tree Children's No1"), and the chosen sender alias is learned. A shop already on the sheet is flagged ("Standing order on this sheet").
 - **Line count:** big LINES and ITEMS numbers plus a per-category count.
 - **Product picker:** a custom panel instead of a long dropdown. It opens on the item's own category with the others folded, has a search box, and becomes a bottom sheet on phones.
-- **Voice:** a Speak button (Web Speech API, en-GB) shows a live transcript and adds what was said as a list (`listify`: number words become digits and each quantity starts a line). Read order also tidies run-on lines from keyboard dictation (`tidyText`) and leaves normal emails alone.
+- **Voice:** a Speak button that keeps listening until Stop (phones switch the mic off after a few seconds of silence, so a new session starts automatically and the text so far is kept; it gives up after 60 s with nothing new heard); (Web Speech API, en-GB) shows a live transcript and adds what was said as a list (`listify`: number words become digits and each quantity starts a line). Read order also tidies run-on lines from keyboard dictation (`tidyText`) and leaves normal emails alone.
 - **Compiled sheet:**
   - Send to Google Sheet asks for confirmation and shows the target file name in large type.
   - Preview sheet is a toggle button; Copy all is a fallback (text only).
